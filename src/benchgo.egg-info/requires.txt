@@ -1,0 +1,3 @@
+pyyaml
+pyjson
+prometheus_api_client

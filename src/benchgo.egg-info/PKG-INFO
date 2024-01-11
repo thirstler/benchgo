@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: benchgo
+Version: 0.1
+Summary: Benchmarking scripts and utls
+Home-page: https://github.com/thirstler/benchgo
+Author: Jason Russler
+Author-email: jason.russler@vastdata.com
+Project-URL: Bug Tracker, https://github.com/thirstler/benchgo/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Requires-Dist: pyyaml
+Requires-Dist: pyjson
+Requires-Dist: prometheus_api_client

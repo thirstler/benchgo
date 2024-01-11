@@ -1,0 +1,60 @@
+#!/bin/env python3
+import argparse
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Benchmark control script"
+    )
+    parser.add_argument("--name", required=True, default="benchgo", help="name this run something - will show up in output directory")
+    parser.add_argument("--benchmark", required=True, help="benchmark task to run (tpcds, tpcds_s, insert, delete)")
+
+    parser.add_argument("--engine", help="target engine (trino, starburst, spark, dremio, vdb-sdk)")
+    
+    # Prometheus options
+    parser.add_argument("--prometheus-host", help="URL for prometheus host (e.g.: http://myhost:3000)")
+    parser.add_argument("--trino-prometheus-job", default="trino_1", help="Prometheus job name containing the node_exporter data for the Trino cluster")
+    parser.add_argument("--cnode-prometheus-job", default="vast_cnodes", help="Prometheus job name containing the node_exporter data for the VAST CNode cluster")
+    parser.add_argument("--sleep-between-queries", default=5, help="gap in seconds between queries to avoid overlap in stats collection")
+
+    # Trino options
+    parser.add_argument("--trino-coordinator", help="Trino coordinator URI (e.g.: http://trino_coord:8080)")
+    parser.add_argument("--trino-password", default=None, help="Trino password")
+    parser.add_argument("--trino-user", default='admin', help="Trino username")
+    parser.add_argument("--trino-catalog", help="catalog housing target tpcds database")
+    parser.add_argument("--trino-schema", help="schema housing target tpcds database")
+
+    # Spark options
+    parser.add_argument("--spark-master", help="Spark master URI (e.g.: spark://spark_master:7077)")
+
+    # Dremio options
+    pass
+
+    # SDK options
+    pass
+
+    # TPC-DS options
+    parser.add_argument("--tpcds-scale", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the queries to use, not the data set")
+
+
+    # TPC-DS_S options
+    parser.add_argument("--tpcds-s-scale", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the queries to use, not the data set")
+
+    # Insert options
+    parser.add_argument("--agent-nodes", help="comma-separated list of nodes to run on")
+    parser.add_argument("--agent-procs", help="num procs to run per node")
+    parser.add_argument("--insert-scale", help="rows to write (e.g.: 1000000)")
+    parser.add_argument("--insert-batch", help="batch size for insertions")
+
+
+    args = parser.parse_args()
+
+    if args.engine == "trino" or args.engine == "starburst":
+        from benchgo.benchgo_trino import *
+        run(args)
+    
+
+
+
+
+     
