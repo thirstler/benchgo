@@ -1,0 +1,209 @@
+#!/bin/env pyspark
+
+from prometheus_api_client import PrometheusConnect
+import os, sys
+from pyspark.sql import SparkSession
+from pyspark.conf import SparkConf
+import datetime
+import json
+from benchgo.tpcds_sf10000_queries import *
+from benchgo.tpcds_sf1000_queries import *
+from benchgo.prometheus_handlers import *
+
+##
+# CONFIGURATION
+APP_NAME="benchmark_vdb_1t"
+SPARK_MASTER="spark://node5:7077"
+SPARK_EXEC_MEMORY="200g"
+SPARK_DRIVER_MEMORY="32g"
+SPARK_CATALOG="ndb"
+SPARK_DATABASE="db0.tpcds.1t"
+TPCDS_QUERY_SCALE_FACTOR="sf1000"
+EXEC_PROMETHEUS_JOB="trino_2"
+CNODE_PROMETHEUS_JOB="vast_cnodes"
+PROMETHEUS_HOST="http://10.73.1.41:9090"
+EXPLAIN=True
+EXEC_MONITORING=True
+EXEC_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9082:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+DRIVER_MONITORING=True
+DRIVER_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9084:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8092 -Dcom.sun.management.jmxremote.rmi.port=8093 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+
+
+##
+# Leave to None to run all listed queries
+# Otherwise, it's a list of query names to run (["query1", "query2"...])
+#RUN_QUERIES=["query14a", "query14b"]
+RUN_QUERIES=None
+#RUN_QUERIES=["query90", "query91", "query92", "query93", "query94", "query95", "query96", "query97", "query98", "query98"]
+
+def config_connect():
+
+    conf = SparkConf()
+    conf.setAppName(APP_NAME)
+    conf.setMaster(SPARK_MASTER)
+    conf.set("spark.executor.memory", SPARK_EXEC_MEMORY)
+    conf.set("spark.driver.memory", SPARK_DRIVER_MEMORY)
+    conf.set("spark.executor.userClassPathFirst", "true")
+    conf.set("spark.driver.userClassPathFirst", "true")
+    conf.set("spark.sql.catalogImplementation", "in-memory")
+    if EXEC_MONITORING:
+        conf.set("spark.executor.extraJavaOptions", EXEC_MONITORING_OPTIONS)
+    if DRIVER_MONITORING:
+        conf.set("spark.driver.extraJavaOptions", DRIVER_MONITORING_OPTIONS)
+    spark = SparkSession.builder.config(conf=conf).getOrCreate()
+    
+    return spark
+
+
+if __name__ == "__main__":
+
+    if TPCDS_QUERY_SCALE_FACTOR == "sf10000":
+        queries = tpcds_10t_queries.queries
+    elif TPCDS_QUERY_SCALE_FACTOR == "sf1000":
+        queries = tpcds_1t_queries.queries
+
+    prom = PrometheusConnect(
+        url=PROMETHEUS_HOST,
+        disable_ssl=True,
+    )
+
+    outdir = "/tmp/{}_{}".format(APP_NAME, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    os.mkdir(outdir)
+
+    benchmark_start_time = datetime.datetime.now()
+    spark = config_connect()
+    header = "row, query, id, elapsed, nodes, cpu, mem, rows, bytes, splits, exec cluster util, cnode cluster util, all cpu util, exec ingress, disk_r, disk_w"
+
+    spark.sql("USE {catalog}.{database}".format(catalog=SPARK_CATALOG, database=SPARK_DATABASE))
+    rowcount = 0
+
+    run_queries = []
+    if RUN_QUERIES != None:
+        run_queries = RUN_QUERIES
+    else:
+        for q in queries:
+            run_queries.append(q)
+
+    with open("{outdir}/timings.csv".format(outdir=outdir), "w") as th:
+
+        th.write("{header}\n".format(header=header))
+        th.flush()
+        for q in run_queries:
+            rowcount += 1
+            if EXPLAIN:
+                explain = spark.sql("EXPLAIN " + queries[q])
+                explain_result = [str(row) for row in explain.collect()]
+                with open("{outdir}/explain_{query}.txt".format(outdir=outdir, query=q), "w") as fh:
+                    fh.write("".join(explain_result)+"\n")
+                    fh.close()
+
+            success = None
+            try:
+                res = spark.sql(queries[q])
+                then = datetime.datetime.now(tz=datetime.UTC)
+                result_string = "\n".join([str(row) for row in res.collect()])
+                now = datetime.datetime.now(tz=datetime.UTC)
+                elapsed = now.timestamp() - then.timestamp()
+                spark.sparkContext._jvm.System.gc() # Force a GC 
+                success = True
+            except Exception as e:
+                print(e)
+                print("partial output in {outdir}".format(outdir=outdir))
+                success = False
+
+            
+            # Gather associated metrics
+            exec_cpu_data = prom.get_metric_range_data(
+                metric_name='node_cpu_seconds_total',
+                label_config={"job": EXEC_PROMETHEUS_JOB, "mode": "idle"},
+                start_time=then,
+                end_time=now
+            )
+            cnode_cpu_data = prom.get_metric_range_data(
+                metric_name='node_cpu_seconds_total',
+                label_config={"job": CNODE_PROMETHEUS_JOB, "mode": "idle"},
+                start_time=then,
+                end_time=now
+            )
+            exec_network_data_in = prom.get_metric_range_data(
+                metric_name='node_netstat_IpExt_InOctets',
+                label_config={"job": EXEC_PROMETHEUS_JOB},
+                start_time=then,
+                end_time=now
+            )
+            exec_network_data_out = prom.get_metric_range_data(
+                metric_name='node_netstat_IpExt_OutOctets',
+                label_config={"job": EXEC_PROMETHEUS_JOB},
+                start_time=then,
+                end_time=now
+            )
+            exec_disk_reads = prom.get_metric_range_data(
+                metric_name='node_disk_read_bytes_total',
+                label_config={"job": EXEC_PROMETHEUS_JOB},
+                start_time=then,
+                end_time=now
+            )
+            exec_disk_writes = prom.get_metric_range_data(
+                metric_name='node_disk_written_bytes_total',
+                label_config={"job": EXEC_PROMETHEUS_JOB},
+                start_time=then,
+                end_time=now
+            )
+            exec_cpus = prom_node_cpu_count(exec_cpu_data)
+            cnode_cpus = prom_node_cpu_count(cnode_cpu_data)
+            tnet_in = prom_node_net_rate(exec_network_data_in)
+            tnet_out = prom_node_net_rate(exec_network_data_out)
+            exec_disk_r = prom_node_disk_rate(exec_disk_reads)
+            exec_disk_w = prom_node_disk_rate(exec_disk_writes)
+            execnet_quiet_in = tnet_in - tnet_out
+
+            ttl_cpus = exec_cpus+cnode_cpus
+            exec_cluster_rate = 1 - prom_node_cpu_util_rate(exec_cpu_data, "idle")
+            cnode_cluster_rate = 1 - prom_node_cpu_util_rate(cnode_cpu_data, "idle")
+
+            stats = "{rowcount:03d}, {query}, {query_id}, {elapsed:.2f}, {nodes}, {cpu}, {mem}, {rows}, {bytes}, {splits}, {exec_cluster_util}, {cnode_cluster_util}, {all_cpu_util}, {exec_ingress_rate:.2f}, {disk_r}, {disk_w}".format(
+                rowcount=rowcount,
+                query=q + "" if success else "FAILED",
+                query_id="n/a",
+                elapsed=elapsed,
+                nodes="null",
+                cpu="null",
+                mem="null",
+                rows="null",
+                bytes="null",
+                splits="null",
+                exec_cluster_util =  "{:.2f}".format(exec_cluster_rate) if exec_cluster_rate <= 1 else "",
+                cnode_cluster_util = "{:.2f}".format(cnode_cluster_rate) if cnode_cluster_rate <= 1 else "",
+                all_cpu_util = "{:.2f}".format(((exec_cluster_rate*exec_cpus) + (cnode_cluster_rate*cnode_cpus))/(ttl_cpus if ttl_cpus > 0 else 1)) if (exec_cluster_rate <= 1 and cnode_cluster_rate <= 1) else "",
+                exec_ingress_rate=execnet_quiet_in,
+                disk_r=exec_disk_r,
+                disk_w=exec_disk_w
+            )
+              
+            print("{stats}\n".format(stats=stats))
+            th.write("{stats}\n".format(stats=stats))
+            th.flush()
+
+            with open("{outdir}/output_{query}.txt".format(outdir=outdir, query=q), "w") as fh:
+                fh.write(result_string+"\n")
+                fh.close()
+            
+            with open("{outdir}/node_series_{query}.json".format(outdir=outdir, query=q), "w") as fh:
+                fh.write(json.dumps({
+                    "exec_cpus": exec_cpu_data,
+                    "cnode_cpus": cnode_cpu_data,
+                    "tnet_in": exec_network_data_in,
+                    "tnet_out": exec_network_data_out,
+                    "trino_disk_r": exec_disk_reads,
+                    "trino_disk_w": exec_disk_writes
+                }))
+                fh.close()
+
+    benchmark_end_time = datetime.datetime.now()
+    elapsed_benchmark_time = benchmark_end_time - benchmark_start_time
+    print("elapsed: {}s (NOT a performance timing metric)".format(str(elapsed_benchmark_time.seconds)))
+    
+    dump_stats(prom, benchmark_start_time, benchmark_end_time, outdir)
+    
+    spark.stop()
+    print("done")

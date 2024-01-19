@@ -1,3 +1,7 @@
+import sqlite3
+import sys
+import zlib
+import json
 
 def prom_node_cpu_util_rate(data, mode):
     ttl_p = 0
@@ -60,3 +64,28 @@ def prom_node_cpu_count(data, ht=True):
             cpu_count += 1
             
     return cpu_count
+
+def dump_stats(prom, start, stop, outdir):
+
+    print("archiving all collected Prometheus metrics for job to SQLite db at {}/prometheus_archive.db".format(outdir))
+    everything = prom.all_metrics()
+    con = sqlite3.connect("{}/prometheus_dump.db".format(outdir))
+    cur = con.cursor()
+    cur.execute("CREATE TABLE dump (metric, data)")
+    count=0
+    complete=0
+    batch = []
+    for p in everything:
+        metric = prom.get_metric_range_data(
+            metric_name=p,
+            start_time=start,
+            end_time=stop
+        )
+        batch.append((p, zlib.compress(bytes(json.dumps(metric), 'utf-8'))))
+        if count==100:
+            cur.executemany("INSERT INTO dump VALUES(?, ?)", batch)
+            sys.stdout.write('\r' + str(complete) + '/' +  str(len(everything)))
+            count = 0
+            batch.clear()
+        count+=1
+        complete+=1

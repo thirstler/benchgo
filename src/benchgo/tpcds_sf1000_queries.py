@@ -1,4 +1,4 @@
-class tpcds_10t_queries:
+class tpcds_1t_queries:
   queries={"query1": """
 with customer_total_return as
 (select sr_customer_sk as ctr_customer_sk
@@ -491,8 +491,8 @@ select  s_store_name
 "query9": """
 select case when (select count(*) 
                   from store_sales 
-                  where ss_quantity between 1 and 20) > 240409437
-            then (select avg(ss_ext_discount_amt) 
+                  where ss_quantity between 1 and 20) > 409437
+            then (select avg(ss_ext_list_price) 
                   from store_sales 
                   where ss_quantity between 1 and 20) 
             else (select avg(ss_net_paid_inc_tax)
@@ -500,8 +500,8 @@ select case when (select count(*)
                   where ss_quantity between 1 and 20) end bucket1 ,
        case when (select count(*)
                   from store_sales
-                  where ss_quantity between 21 and 40) > 165058728
-            then (select avg(ss_ext_discount_amt)
+                  where ss_quantity between 21 and 40) > 4595804
+            then (select avg(ss_ext_list_price)
                   from store_sales
                   where ss_quantity between 21 and 40) 
             else (select avg(ss_net_paid_inc_tax)
@@ -509,8 +509,8 @@ select case when (select count(*)
                   where ss_quantity between 21 and 40) end bucket2,
        case when (select count(*)
                   from store_sales
-                  where ss_quantity between 41 and 60) > 111708270
-            then (select avg(ss_ext_discount_amt)
+                  where ss_quantity between 41 and 60) > 7887297
+            then (select avg(ss_ext_list_price)
                   from store_sales
                   where ss_quantity between 41 and 60)
             else (select avg(ss_net_paid_inc_tax)
@@ -518,8 +518,8 @@ select case when (select count(*)
                   where ss_quantity between 41 and 60) end bucket3,
        case when (select count(*)
                   from store_sales
-                  where ss_quantity between 61 and 80) > 205226190
-            then (select avg(ss_ext_discount_amt)
+                  where ss_quantity between 61 and 80) > 10872978
+            then (select avg(ss_ext_list_price)
                   from store_sales
                   where ss_quantity between 61 and 80)
             else (select avg(ss_net_paid_inc_tax)
@@ -527,8 +527,8 @@ select case when (select count(*)
                   where ss_quantity between 61 and 80) end bucket4,
        case when (select count(*)
                   from store_sales
-                  where ss_quantity between 81 and 100) > 80139625
-            then (select avg(ss_ext_discount_amt)
+                  where ss_quantity between 81 and 100) > 43571537
+            then (select avg(ss_ext_list_price)
                   from store_sales
                   where ss_quantity between 81 and 100)
             else (select avg(ss_net_paid_inc_tax)
@@ -984,23 +984,23 @@ select  ca_zip
  limit 100""",
 "query16": """
 select  
-   count(distinct cs_order_number) as "order count"
-  ,sum(cs_ext_ship_cost) as "total shipping cost"
-  ,sum(cs_net_profit) as "total net profit"
+   count(distinct cs_order_number) as order_count
+  ,sum(cs_ext_ship_cost) as total_shipping_cost
+  ,sum(cs_net_profit) as total_net_profit
 from
    catalog_sales cs1
   ,date_dim
   ,customer_address
   ,call_center
 where
-    d_date between date(date('1999-4-01')) and 
-           (cast(date('1999-4-01') as date) + interval '60' day)
+    d_date between date(date('2001-4-01')) and 
+           (cast(date('2001-4-01') as date) + interval '60' day)
 and cs1.cs_ship_date_sk = d_date_sk
 and cs1.cs_ship_addr_sk = ca_address_sk
-and ca_state = 'IA'
+and ca_state = 'NY'
 and cs1.cs_call_center_sk = cc_call_center_sk
-and cc_county in ('Mobile County','Maverick County','Huron County','Kittitas County',
-                  'Fairfield County'
+and cc_county in ('Ziebach County','Levy County','Huron County','Franklin Parish',
+                  'Daviess County'
 )
 and exists (select *
             from catalog_sales cs2
@@ -1472,11 +1472,11 @@ select  i_item_id,
        ss_item_sk = i_item_sk and
        ss_store_sk = s_store_sk and
        ss_cdemo_sk = cd_demo_sk and
-       cd_gender = 'F' and
-       cd_marital_status = 'D' and
-       cd_education_status = 'Unknown' and
-       d_year = 1998 and
-       s_state in ('KS','AL', 'MN', 'AL', 'SC', 'VT')
+       cd_gender = 'M' and
+       cd_marital_status = 'U' and
+       cd_education_status = '2 yr Degree' and
+       d_year = 2001 and
+       s_state in ('SD','FL', 'MI', 'LA', 'MO', 'SC')
  group by rollup (i_item_id, s_state)
  order by i_item_id
          ,s_state
@@ -1657,7 +1657,7 @@ with ss as
        > case when ss2.store_sales > 0 then ss3.store_sales/ss2.store_sales else null end
  order by ss1.d_year""",
 "query32": """
-select  sum(cs_ext_discount_amt)  as "excess discount amount" 
+select  sum(cs_ext_discount_amt)  as excess_discount_amount 
 from 
    catalog_sales 
    ,item 
@@ -1770,16 +1770,16 @@ select c_last_name
     and store_sales.ss_store_sk = store.s_store_sk  
     and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
     and (date_dim.d_dom between 1 and 3 or date_dim.d_dom between 25 and 28)
-    and (household_demographics.hd_buy_potential = '1001-5000' or
-         household_demographics.hd_buy_potential = '5001-10000')
+    and (household_demographics.hd_buy_potential = '>10000' or
+         household_demographics.hd_buy_potential = 'Unknown')
     and household_demographics.hd_vehicle_count > 0
     and (case when household_demographics.hd_vehicle_count > 0 
 	then household_demographics.hd_dep_count/ household_demographics.hd_vehicle_count 
 	else null 
 	end)  > 1.2
-    and date_dim.d_year in (1998,1998+1,1998+2)
-    and store.s_county in ('Kittitas County','Adams County','Richland County','Furnas County',
-                           'Orange County','Appanoose County','Franklin Parish','Tehama County')
+    and date_dim.d_year in (2000,2000+1,2000+2)
+    and store.s_county in ('Mobile County','Maverick County','Huron County','Kittitas County',
+                           'Fairfield County','Jackson County','Barrow County','Pennington County')
     group by ss_ticket_number,ss_customer_sk) dn,customer
     where ss_customer_sk = c_customer_sk
       and cnt between 15 and 20
@@ -1856,12 +1856,12 @@ select
    ,item
    ,store
  where
-    d1.d_year = 1998 
+    d1.d_year = 1999 
  and d1.d_date_sk = ss_sold_date_sk
  and i_item_sk  = ss_item_sk 
  and s_store_sk  = ss_store_sk
- and s_state in ('KS','AL','MN','AL',
-                 'SC','VT','MI','SD')
+ and s_state in ('SD','FL','MI','LA',
+                 'MO','SC','AL','GA')
  group by rollup(i_category,i_class)
  order by
    lochierarchy desc
@@ -2076,11 +2076,11 @@ from(select *
      from (select item_sk,rank() over (order by rank_col asc) rnk
            from (select ss_item_sk item_sk,avg(ss_net_profit) rank_col 
                  from store_sales ss1
-                 where ss_store_sk = 686
+                 where ss_store_sk = 410
                  group by ss_item_sk
                  having avg(ss_net_profit) > 0.9*(select avg(ss_net_profit) rank_col
                                                   from store_sales
-                                                  where ss_store_sk = 686
+                                                  where ss_store_sk = 410
                                                     and ss_hdemo_sk is null
                                                   group by ss_store_sk))V1)V11
      where rnk  < 11) asceding,
@@ -2088,11 +2088,11 @@ from(select *
      from (select item_sk,rank() over (order by rank_col desc) rnk
            from (select ss_item_sk item_sk,avg(ss_net_profit) rank_col
                  from store_sales ss1
-                 where ss_store_sk = 686
+                 where ss_store_sk = 410
                  group by ss_item_sk
                  having avg(ss_net_profit) > 0.9*(select avg(ss_net_profit) rank_col
                                                   from store_sales
-                                                  where ss_store_sk = 686
+                                                  where ss_store_sk = 410
                                                     and ss_hdemo_sk is null
                                                   group by ss_store_sk))V2)V21
      where rnk  < 11) descending,
@@ -2139,11 +2139,11 @@ select  c_last_name
     and store_sales.ss_store_sk = store.s_store_sk  
     and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
     and store_sales.ss_addr_sk = customer_address.ca_address_sk
-    and (household_demographics.hd_dep_count = 4 or
-         household_demographics.hd_vehicle_count= 2)
+    and (household_demographics.hd_dep_count = 2 or
+         household_demographics.hd_vehicle_count= 1)
     and date_dim.d_dow in (6,0)
     and date_dim.d_year in (1998,1998+1,1998+2) 
-    and store.s_city in ('Rosedale','Bethlehem','Clinton','Clifton','Springfield') 
+    and store.s_city in ('Cedar Grove','Wildwood','Union','Salem','Highland Park') 
     group by ss_ticket_number,ss_customer_sk,ss_addr_sk,ca_city) dn,customer,customer_address current_addr
     where ss_customer_sk = c_customer_sk
       and customer.c_current_addr_sk = current_addr.ca_address_sk
@@ -2407,14 +2407,14 @@ select
   ,s_county
   ,s_state
   ,s_zip
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk <= 30 ) then 1 else 0 end)  as "30 days" 
+  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 30) and 
-                 (sr_returned_date_sk - ss_sold_date_sk <= 60) then 1 else 0 end )  as "31-60 days" 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 60) and 
-                 (sr_returned_date_sk - ss_sold_date_sk <= 90) then 1 else 0 end)  as "61-90 days" 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 90) and
-                 (sr_returned_date_sk - ss_sold_date_sk <= 120) then 1 else 0 end)  as "91-120 days" 
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk  > 120) then 1 else 0 end)  as ">120 days" 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days 
 from
    store_sales
   ,store_returns
@@ -2948,14 +2948,14 @@ select
    substr(w_warehouse_name,1,20)
   ,sm_type
   ,web_name
-  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk <= 30 ) then 1 else 0 end)  as "30 days" 
+  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 30) and 
-                 (ws_ship_date_sk - ws_sold_date_sk <= 60) then 1 else 0 end )  as "31-60 days" 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 60) and 
-                 (ws_ship_date_sk - ws_sold_date_sk <= 90) then 1 else 0 end)  as "61-90 days" 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 90) and
-                 (ws_ship_date_sk - ws_sold_date_sk <= 120) then 1 else 0 end)  as "91-120 days" 
-  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk  > 120) then 1 else 0 end)  as ">120 days" 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days 
 from
    web_sales
   ,warehouse
@@ -3434,10 +3434,10 @@ select  c_last_name
         and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
         and store_sales.ss_addr_sk = customer_address.ca_address_sk
         and date_dim.d_dom between 1 and 2 
-        and (household_demographics.hd_dep_count = 4 or
-             household_demographics.hd_vehicle_count= 2)
+        and (household_demographics.hd_dep_count = 2 or
+             household_demographics.hd_vehicle_count= 1)
         and date_dim.d_year in (1998,1998+1,1998+2)
-        and store.s_city in ('Rosedale','Bethlehem')
+        and store.s_city in ('Cedar Grove','Wildwood')
        group by ss_ticket_number
                ,ss_customer_sk
                ,ss_addr_sk,ca_city) dn
@@ -3610,13 +3610,13 @@ select c_last_name
     and store_sales.ss_store_sk = store.s_store_sk  
     and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk
     and date_dim.d_dom between 1 and 2 
-    and (household_demographics.hd_buy_potential = '1001-5000' or
-         household_demographics.hd_buy_potential = '5001-10000')
+    and (household_demographics.hd_buy_potential = '>10000' or
+         household_demographics.hd_buy_potential = 'Unknown')
     and household_demographics.hd_vehicle_count > 0
     and case when household_demographics.hd_vehicle_count > 0 then 
              household_demographics.hd_dep_count/ household_demographics.hd_vehicle_count else null end > 1
-    and date_dim.d_year in (1998,1998+1,1998+2)
-    and store.s_county in ('Kittitas County','Adams County','Richland County','Furnas County')
+    and date_dim.d_year in (2000,2000+1,2000+2)
+    and store.s_county in ('Mobile County','Maverick County','Huron County','Kittitas County')
     group by ss_ticket_number,ss_customer_sk) dj,customer
     where ss_customer_sk = c_customer_sk
       and cnt between 1 and 5
@@ -4471,7 +4471,7 @@ group by cc_call_center_id,cc_name,cc_manager,cd_marital_status,cd_education_sta
 order by sum(cr_net_loss) desc""",
 "query92": """
 select  
-   sum(ws_ext_discount_amt)  as "Excess Discount Amount" 
+   sum(ws_ext_discount_amt)  as excess_discount_amount 
 from 
     web_sales 
    ,item 
@@ -4515,9 +4515,9 @@ select  ss_customer_sk
 limit 100""",
 "query94": """
 select  
-   count(distinct ws_order_number) as "order count"
-  ,sum(ws_ext_ship_cost) as "total shipping cost"
-  ,sum(ws_net_profit) as "total net profit"
+   count(distinct ws_order_number) as order_count
+  ,sum(ws_ext_ship_cost) as total_shipping_cost
+  ,sum(ws_net_profit) as total_net_profit
 from
    web_sales ws1
   ,date_dim
@@ -4547,9 +4547,9 @@ with ws_wh as
  where ws1.ws_order_number = ws2.ws_order_number
    and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
  select  
-   count(distinct ws_order_number) as "order count"
-  ,sum(ws_ext_ship_cost) as "total shipping cost"
-  ,sum(ws_net_profit) as "total net profit"
+   count(distinct ws_order_number) as order_count
+  ,sum(ws_ext_ship_cost) as total_shipping_cost
+  ,sum(ws_net_profit) as total_net_profit
 from
    web_sales ws1
   ,date_dim
@@ -4643,14 +4643,14 @@ select
    substr(w_warehouse_name,1,20)
   ,sm_type
   ,cc_name
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk <= 30 ) then 1 else 0 end)  as "30 days" 
+  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 30) and 
-                 (cs_ship_date_sk - cs_sold_date_sk <= 60) then 1 else 0 end )  as "31-60 days" 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 60) and 
-                 (cs_ship_date_sk - cs_sold_date_sk <= 90) then 1 else 0 end)  as "61-90 days" 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 90) and
-                 (cs_ship_date_sk - cs_sold_date_sk <= 120) then 1 else 0 end)  as "91-120 days" 
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk  > 120) then 1 else 0 end)  as ">120 days" 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days 
 from
    catalog_sales
   ,warehouse

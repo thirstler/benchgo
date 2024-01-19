@@ -1,10 +1,6 @@
 #!/bin/env python3
 import datetime
 from prometheus_api_client import PrometheusConnect
-import json
-import sqlite3
-import sys
-import zlib
 
 def prom_node_cpu_util_rate(data, mode):
     ttl_p = 0

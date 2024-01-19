@@ -13,3 +13,5 @@ Requires-Python: >=3.6
 Requires-Dist: pyyaml
 Requires-Dist: pyjson
 Requires-Dist: prometheus_api_client
+Requires-Dist: pyspark
+Requires-Dist: trino

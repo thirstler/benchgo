@@ -26,6 +26,8 @@ if __name__ == "__main__":
 
     # Spark options
     parser.add_argument("--spark-master", help="Spark master URI (e.g.: spark://spark_master:7077)")
+    parser.add_argument("--spark-executor-mem", default="32g", help="spark executor memory")
+    parser.add_argument("--spark-database-path", default="spark_default", help="full path to target database")
 
     # Dremio options
     pass
@@ -52,7 +54,7 @@ if __name__ == "__main__":
     if args.engine == "trino" or args.engine == "starburst":
         from benchgo.benchgo_trino import *
         run(args)
-    
+        
 
 
 

@@ -1,3 +1,5 @@
 pyyaml
 pyjson
 prometheus_api_client
+pyspark
+trino
