@@ -25,6 +25,7 @@ def prom_node_cpu_util_rate(data, mode):
 
     return rate
 
+
 def prom_node_net_rate(data):
     ttl_r = 0
     instances = {}
@@ -69,7 +70,7 @@ def dump_stats(prom, start, stop, outdir):
 
     print("archiving all collected Prometheus metrics for job to SQLite db at {}/prometheus_archive.db".format(outdir))
     everything = prom.all_metrics()
-    con = sqlite3.connect("{}/prometheus_dump.db".format(outdir))
+    con = sqlite3.connect("{}/prometheus_archive.db".format(outdir))
     cur = con.cursor()
     cur.execute("CREATE TABLE dump (metric, data)")
     count=0
@@ -89,3 +90,7 @@ def dump_stats(prom, start, stop, outdir):
             batch.clear()
         count+=1
         complete+=1
+    cur.executemany("INSERT INTO dump VALUES(?, ?)", batch)
+    sys.stdout.write('\r' + str(complete) + '/' +  str(len(everything)))
+    con.commit()
+    cur.close()

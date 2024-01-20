@@ -121,7 +121,7 @@ def run(args):
             trino_cluster_rate = 1 - prom_node_cpu_util_rate(trino_cpu_data, "idle")
             cnode_cluster_rate = 1 - prom_node_cpu_util_rate(cnode_cpu_data, "idle")
 
-            timing = "{rowcount:03d}, {query}, {query_id}, {time}, {nodes}, {cpu}, {mem}, {rows}, {bytes}, {splits}, {t_cluster_util}, {v_cluster_util}, {agg_cpu_util}, {tnet_quiet_in:.2f}, {disk_r}, {disk_w}".format(
+            timing = "{rowcount:03d},{query},{query_id},{time},{nodes},{cpu},{mem},{rows},{bytes},{splits},{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
                 rowcount=row_count,
                 nodes=ed.stats["nodes"],
                 splits=ed.stats["totalSplits"],

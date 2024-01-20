@@ -161,7 +161,7 @@ if __name__ == "__main__":
             exec_cluster_rate = 1 - prom_node_cpu_util_rate(exec_cpu_data, "idle")
             cnode_cluster_rate = 1 - prom_node_cpu_util_rate(cnode_cpu_data, "idle")
 
-            stats = "{rowcount:03d}, {query}, {query_id}, {elapsed:.2f}, {nodes}, {cpu}, {mem}, {rows}, {bytes}, {splits}, {exec_cluster_util}, {cnode_cluster_util}, {all_cpu_util}, {exec_ingress_rate:.2f}, {disk_r}, {disk_w}".format(
+            stats = "{rowcount:03d},{query},{query_id},{elapsed:.2f},{nodes},{cpu},{mem},{rows},{bytes},{splits},{exec_cluster_util},{cnode_cluster_util},{all_cpu_util},{exec_ingress_rate:.2f},{disk_r},{disk_w}".format(
                 rowcount=rowcount,
                 query=q + "" if success else "FAILED",
                 query_id="n/a",
@@ -172,7 +172,7 @@ if __name__ == "__main__":
                 rows="null",
                 bytes="null",
                 splits="null",
-                exec_cluster_util =  "{:.2f}".format(exec_cluster_rate) if exec_cluster_rate <= 1 else "",
+                exec_cluster_util =  "{:.2f}".format(exec_cluster_rate)  if exec_cluster_rate  <= 1 else "",
                 cnode_cluster_util = "{:.2f}".format(cnode_cluster_rate) if cnode_cluster_rate <= 1 else "",
                 all_cpu_util = "{:.2f}".format(((exec_cluster_rate*exec_cpus) + (cnode_cluster_rate*cnode_cpus))/(ttl_cpus if ttl_cpus > 0 else 1)) if (exec_cluster_rate <= 1 and cnode_cluster_rate <= 1) else "",
                 exec_ingress_rate=execnet_quiet_in,
