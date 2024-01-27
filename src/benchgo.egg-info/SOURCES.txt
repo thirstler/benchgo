@@ -3,13 +3,14 @@ pyproject.toml
 setup.cfg
 scripts/benchgo
 scripts/benchgo_spark
+scripts/mkdata
 src/benchgo/__init__.py
 src/benchgo/benchgo_trino.py
 src/benchgo/prometheus_handlers.py
-src/benchgo/tpcds_s_queries.py
-src/benchgo/tpcds_selective.py
+src/benchgo/tpcds_selective_queries.py
 src/benchgo/tpcds_sf10000_queries.py
 src/benchgo/tpcds_sf1000_queries.py
+src/benchgo/transaction_tables.py
 src/benchgo.egg-info/PKG-INFO
 src/benchgo.egg-info/SOURCES.txt
 src/benchgo.egg-info/dependency_links.txt

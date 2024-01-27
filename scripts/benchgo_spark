@@ -12,10 +12,10 @@ from benchgo.prometheus_handlers import *
 
 ##
 # CONFIGURATION
-APP_NAME="benchmark_vdb_1t"
+APP_NAME="spark_vdb_tpcds_1t"
 SPARK_MASTER="spark://node5:7077"
 SPARK_EXEC_MEMORY="200g"
-SPARK_DRIVER_MEMORY="32g"
+SPARK_DRIVER_MEMORY="8g"
 SPARK_CATALOG="ndb"
 SPARK_DATABASE="db0.tpcds.1t"
 TPCDS_QUERY_SCALE_FACTOR="sf1000"
@@ -27,7 +27,7 @@ EXEC_MONITORING=True
 EXEC_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9082:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 DRIVER_MONITORING=True
 DRIVER_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9084:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8092 -Dcom.sun.management.jmxremote.rmi.port=8093 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-
+CNODE_BASE_CPU_UTIL=0.36
 
 ##
 # Leave to None to run all listed queries
@@ -50,6 +50,8 @@ def config_connect():
         conf.set("spark.executor.extraJavaOptions", EXEC_MONITORING_OPTIONS)
     if DRIVER_MONITORING:
         conf.set("spark.driver.extraJavaOptions", DRIVER_MONITORING_OPTIONS)
+    if EXPLAIN:
+        conf.set("spark.sql.debug.maxToStringFields", "100")
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     
     return spark
@@ -100,9 +102,9 @@ if __name__ == "__main__":
             success = None
             try:
                 res = spark.sql(queries[q])
-                then = datetime.datetime.now(tz=datetime.UTC)
+                then = datetime.datetime.now(tz=datetime.timezone.utc)
                 result_string = "\n".join([str(row) for row in res.collect()])
-                now = datetime.datetime.now(tz=datetime.UTC)
+                now = datetime.datetime.now(tz=datetime.timezone.utc)
                 elapsed = now.timestamp() - then.timestamp()
                 spark.sparkContext._jvm.System.gc() # Force a GC 
                 success = True

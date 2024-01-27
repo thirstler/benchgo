@@ -5,10 +5,12 @@ from urllib.parse import urlparse
 from benchgo.tpcds_sf10000_queries import *
 from benchgo.tpcds_sf1000_queries import *
 from benchgo.prometheus_handlers import *
+from benchgo.tpcds_selective_queries import *
 import os
 import datetime
 import json
 import time
+import requests
 
 # Configuration
 TRINO_SESSION={
@@ -16,6 +18,8 @@ TRINO_SESSION={
     "vast.num_of_subsplits": 10,
     "vast.num_of_splits": 64
 }
+# Base CPU utilization from VAST cnodes
+CNODE_BASE_CPU_UTIL=0.36
 
 def connection(args):
 
@@ -38,10 +42,16 @@ def connection(args):
     return cur
 
 def run(args):
-    if args.tpcds_scale == "sf10000":
-        queries = tpcds_10t_queries.queries
-    elif args.tpcds_scale == "sf1000":
-        queries = tpcds_1t_queries.queries
+
+    queries = []
+    if args.benchmark == "tpcds":
+        if args.tpcds_scale == "sf10000":
+            queries = tpcds_10t_queries.queries
+        elif args.tpcds_scale == "sf1000":
+            queries = tpcds_1t_queries.queries
+    elif args.benchmark == "tpcds_s":
+        sq = tpcds_selective_queries()
+        queries = sq.gen_all(args.tpcds_scale)
     
     prom = PrometheusConnect(
             url=args.prometheus_host,
@@ -125,7 +135,7 @@ def run(args):
                 rowcount=row_count,
                 nodes=ed.stats["nodes"],
                 splits=ed.stats["totalSplits"],
-                time=(ed.stats["elapsedTimeMillis"]-ed.stats["queuedTimeMillis"]),
+                time=((ed.stats["elapsedTimeMillis"]-ed.stats["queuedTimeMillis"]))/1000,
                 cpu=ed.stats["cpuTimeMillis"],
                 rows=ed.stats["processedRows"],
                 bytes=ed.stats["processedBytes"],
@@ -144,8 +154,14 @@ def run(args):
             th.flush()
             print(timing)
 
-            with open("{outdir}/stats_{query}.json".format(outdir=outdir, query=query), "w") as fh:
-                fh.write(json.dumps(ed.stats))
+            req_session = requests.Session()
+            req_session.auth = ("admin", "")
+            response = req_session.get('{trino_coordinator}/v1/query/{query_id}'.format(
+                                            trino_coordinator=args.trino_coordinator,
+                                            query_id=ed.query_id))
+
+            with open("{outdir}/info_{query}.json".format(outdir=outdir, query=query), "w") as fh:
+                fh.write(response.text)
                 fh.close()
 
             with open("{outdir}/output_{query}.txt".format(outdir=outdir, query=query), "w") as fh:
