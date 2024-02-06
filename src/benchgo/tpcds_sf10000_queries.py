@@ -2407,14 +2407,14 @@ select
   ,s_county
   ,s_state
   ,s_zip
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk <= 30 ) then 1 else 0 end)  as thirty_days 
+  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 30) and 
-                 (sr_returned_date_sk - ss_sold_date_sk <= 60) then 1 else 0 end )  as thirtyonetosixty_days 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 60) and 
-                 (sr_returned_date_sk - ss_sold_date_sk <= 90) then 1 else 0 end)  as sixtyonetoninety_days 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (sr_returned_date_sk - ss_sold_date_sk > 90) and
-                 (sr_returned_date_sk - ss_sold_date_sk <= 120) then 1 else 0 end)  as ninetyonetoonehundredandtwenty_days 
-  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk  > 120) then 1 else 0 end)  as gtonehundredandtwenty_days 
+                 (sr_returned_date_sk - ss_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (sr_returned_date_sk - ss_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days   
 from
    store_sales
   ,store_returns
@@ -2948,14 +2948,14 @@ select
    substr(w_warehouse_name,1,20)
   ,sm_type
   ,web_name
-  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk <= 30 ) then 1 else 0 end)  as 30_days 
+  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 30) and 
-                 (ws_ship_date_sk - ws_sold_date_sk <= 60) then 1 else 0 end )  as 31to60_days 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 60) and 
-                 (ws_ship_date_sk - ws_sold_date_sk <= 90) then 1 else 0 end)  as 61to90_days 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (ws_ship_date_sk - ws_sold_date_sk > 90) and
-                 (ws_ship_date_sk - ws_sold_date_sk <= 120) then 1 else 0 end)  as 91to120_days 
-  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk  > 120) then 1 else 0 end)  as gt120_days 
+                 (ws_ship_date_sk - ws_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (ws_ship_date_sk - ws_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days 
 from
    web_sales
   ,warehouse
@@ -4643,14 +4643,14 @@ select
    substr(w_warehouse_name,1,20)
   ,sm_type
   ,cc_name
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk <= 30 ) then 1 else 0 end)  as 30_days 
+  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk <= 30 ) then 1 else 0 end)  as _30_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 30) and 
-                 (cs_ship_date_sk - cs_sold_date_sk <= 60) then 1 else 0 end )  as 31to60_days 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 60) then 1 else 0 end )  as _31to60_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 60) and 
-                 (cs_ship_date_sk - cs_sold_date_sk <= 90) then 1 else 0 end)  as 61to90_days 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 90) then 1 else 0 end)  as _61to90_days 
   ,sum(case when (cs_ship_date_sk - cs_sold_date_sk > 90) and
-                 (cs_ship_date_sk - cs_sold_date_sk <= 120) then 1 else 0 end)  as 91to120_days 
-  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk  > 120) then 1 else 0 end)  as gt120_days 
+                 (cs_ship_date_sk - cs_sold_date_sk <= 120) then 1 else 0 end)  as _91to120_days 
+  ,sum(case when (cs_ship_date_sk - cs_sold_date_sk  > 120) then 1 else 0 end)  as _gt120_days 
 from
    catalog_sales
   ,warehouse

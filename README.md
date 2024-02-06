@@ -27,6 +27,28 @@ Spark benchmarks are run by configuring the "benchgo_spark" script and then subm
     --jars $(echo /usr/local/vast-spark3/*.jar | tr ' ' ',') < $(which benchgo_spark)
 
 
+Iceberg
+
+>   --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 \
+>   --driver-class-path $(echo /opt/spark_vastdb/*.jar | tr ' ' ':') \
+>   --conf spark.executor.extraClassPath=$(echo /opt/spark_vastdb/*.jar | tr ' ' ':') \
+
+'''
+ spark-sql --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 \
+   --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+   --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
+   --conf spark.sql.catalog.spark_catalog.type=hive \
+   --conf spark.sql.catalog.local=org.apache.iceberg.spark.SparkCatalog \
+   --conf spark.sql.catalog.local.type=hive \
+   --conf spark.hadoop.hive.metastore.uris=thrift://10.73.1.41:9083 \
+   --conf spark.hadoop.fs.s3a.impl="org.apache.hadoop.fs.s3a.S3AFileSystem" \
+   --conf spark.hadoop.fs.s3a.access.key="KTYJE7EBRPXFA8LW40RT" \
+   --conf spark.hadoop.fs.s3a.secret.key="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh" \
+   --conf spark.hadoop.fs.s3a.path.style.access="true" \
+   --conf spark.hadoop.fs.s3a.connection.ssl.enabled="false" \
+   --conf spark.hadoop.fs.s3a.endpoint=http://local.tmphx.vast.lab:8070
+'''
+
 Generating Data for Transaction Tests
 -------------------------------------
 

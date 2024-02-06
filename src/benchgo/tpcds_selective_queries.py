@@ -103,7 +103,7 @@ class tpcds_selective_queries:
         for q in self.queries:
             all_queries[q+"_top_1p"] = self.get_query(q, sf, ">", 0.99)
             all_queries[q+"_top_10p"] = self.get_query(q, sf, ">", 0.90)
-            #all_queries[q+"_top_50p"] = self.get_query(q, sf, ">", 0.50)
+            all_queries[q+"_top_50p"] = self.get_query(q, sf, ">", 0.50)
             all_queries[q+"_bottom_10p"] = self.get_query(q, sf, "<", 0.10)
             all_queries[q+"_bottom_1p"] = self.get_query(q, sf, "<", 0.01)
         all_queries["keyfind"] = self.etc["keyfind"]

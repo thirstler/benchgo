@@ -1,7 +1,0 @@
-pyyaml
-pyjson
-prometheus_api_client
-pyspark
-trino
-requests
-boto3

@@ -7,7 +7,7 @@ if __name__ == "__main__":
         description="Benchmark control script"
     )
     parser.add_argument("--name", required=True, default="benchgo", help="name this run something - will show up in output directory")
-    parser.add_argument("--benchmark", required=True, help="benchmark task to run (tpcds, tpcds_s, insert, delete)")
+    parser.add_argument("--benchmark", required=True, help="benchmark task to run (tpcds, tpcds_s, insert, update/delete)")
 
     parser.add_argument("--engine", help="target engine (trino, starburst, spark, dremio, vdb-sdk)")
     
@@ -25,9 +25,9 @@ if __name__ == "__main__":
     parser.add_argument("--trino-schema", help="schema housing target tpcds database")
 
     # Spark options
-    parser.add_argument("--spark-master", help="Spark master URI (e.g.: spark://spark_master:7077)")
-    parser.add_argument("--spark-executor-mem", default="32g", help="spark executor memory")
-    parser.add_argument("--spark-database-path", default="spark_default", help="full path to target database")
+    #parser.add_argument("--spark-master", help="Spark master URI (e.g.: spark://spark_master:7077)")
+    #parser.add_argument("--spark-executor-mem", default="32g", help="spark executor memory")
+    #parser.add_argument("--spark-database-path", default="spark_default", help="full path to target database")
 
     # Dremio options
     pass
@@ -48,12 +48,25 @@ if __name__ == "__main__":
     parser.add_argument("--insert-scale", help="rows to write (e.g.: 1000000)")
     parser.add_argument("--insert-batch", help="batch size for insertions")
 
+    # Update/delete options
+    parser.add_argument("--update-del-tests-sf", default="sf1", help="scale factor for tests (sf1,sf10,sf100,sf1000 or sf10000)")
+    parser.add_argument("--update-del-table", default=None, help="full path of table to run tests on (only works on tables prepared with mkdata utility)")
+    parser.add_argument("--mp", default=1, help="client count for update/insert tests")
+
+    # VASTDB and endpoint options
+    #parser.add_argument("--access-key", default=None, help="AWS-style access key")
+    #parser.add_argument("--secret-key", default=None, help="AWS-style secret access key")
+    #parser.add_argument("--vast-ips", default=None, help="range or list of endpoint addresses ':' delimits indicates a range, ',' delimits a list")
 
     args = parser.parse_args()
 
     if args.engine == "trino" or args.engine == "starburst":
         from benchgo.benchgo_trino import *
         run(args)
+    elif args.engine == "vastdb":
+        from benchgo.benchgo_vastdb import *
+        run(args)
+
         
 
 

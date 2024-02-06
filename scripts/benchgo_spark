@@ -1,4 +1,4 @@
-#!/bin/env pyspark
+#!/bin/env python3
 
 from prometheus_api_client import PrometheusConnect
 import os, sys
@@ -8,33 +8,147 @@ import datetime
 import json
 from benchgo.tpcds_sf10000_queries import *
 from benchgo.tpcds_sf1000_queries import *
+from benchgo.tpcds_selective_queries import *
 from benchgo.prometheus_handlers import *
 
-##
-# CONFIGURATION
+###############################################################################
+# MINIMUMS
+
+# This will cause the script to dump the command for an interactive shell with
+# the configured directives rather than run the benchmark
+DUMP_INTERACTIVE=False
+
+# SPARK MINIMUMS (YOU MUST SET THESE)
 APP_NAME="spark_vdb_tpcds_1t"
-SPARK_MASTER="spark://node5:7077"
+SPARK_MASTER="spark://node1:7077"
 SPARK_EXEC_MEMORY="200g"
 SPARK_DRIVER_MEMORY="8g"
-SPARK_CATALOG="ndb"
-SPARK_DATABASE="db0.tpcds.1t"
+SPARK_CATALOG="spark_catalog"
+SPARK_DATABASE="ice_tpcds_1t"
 TPCDS_QUERY_SCALE_FACTOR="sf1000"
-EXEC_PROMETHEUS_JOB="trino_2"
-CNODE_PROMETHEUS_JOB="vast_cnodes"
-PROMETHEUS_HOST="http://10.73.1.41:9090"
 EXPLAIN=True
-EXEC_MONITORING=True
-EXEC_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9082:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-DRIVER_MONITORING=True
-DRIVER_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9084:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8092 -Dcom.sun.management.jmxremote.rmi.port=8093 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-CNODE_BASE_CPU_UTIL=0.36
 
 ##
+# BENCHMARK MINUMUMS (YOU WANT TO BENCHMARK SOMETHING, RIGHT?)
+BENCHMARK="tpcds"
 # Leave to None to run all listed queries
-# Otherwise, it's a list of query names to run (["query1", "query2"...])
-#RUN_QUERIES=["query14a", "query14b"]
+# Otherwise, it's a list of query names to run, eg: ["query1", "query2"...]
 RUN_QUERIES=None
-#RUN_QUERIES=["query90", "query91", "query92", "query93", "query94", "query95", "query96", "query97", "query98", "query98"]
+
+##
+# VDB MINIMUMS (YOU MUST SET THESE WHEN BENCHMARKING VDB)
+LOAD_VDB=False # False if you don't want to load VDB capability
+VDB_ENDPOINT="http://local.tmphx.vast.lab:8070"
+VDB_LB_ENDPOINTS="http://local.tmphx.vast.lab:8070"
+VDB_ACCESS_KEY="KTYJE7EBRPXFA8LW40RT"
+VDB_SECRET_KEY="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh"
+VDB_SPLITS="64"
+VDB_SUBSPLITS="10"
+VDB_JARS="/usr/local/vast-spark3"
+
+##
+# ICEBERG/S3a MINIMUMS (YOU MUST SET THESE WHEN BENCHMARKING ICEBERG)
+LOAD_ICEBERG=True
+ICEBERG_PACKAGE="org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3"
+ICEBERG_JARS=""
+
+##
+# Hive/S3A MINIMUMS
+HIVE_METASTORE="thrift://10.73.1.41:9083"
+S3A_ACCESS_KEY="KTYJE7EBRPXFA8LW40RT"
+S3A_SECRET_KEY="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh"
+S3A_ENDPOINT="http://local.tmphx.vast.lab:8070"
+
+##
+# BENCHGO CONFIGURATION
+EXEC_MONITORING=True
+EXEC_PROMETHEUS_JOB="trino_1"
+CNODE_PROMETHEUS_JOB="vast_cnodes"
+PROMETHEUS_HOST="http://10.73.1.41:9090"
+EXEC_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9082:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+DRIVER_MONITORING=False # Needed if driver is on separate host from a worker
+DRIVER_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9084:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8092 -Dcom.sun.management.jmxremote.rmi.port=8093 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+
+###############################################################################
+# Additional VDB config/tuning
+SPARK_VDB_CONFIG = (
+    ("spark.ndb.endpoint", VDB_ENDPOINT),
+    ("spark.ndb.data_endpoints", VDB_LB_ENDPOINTS),
+    ("spark.ndb.access_key_id", VDB_ACCESS_KEY),
+    ("spark.ndb.secret_access_key", VDB_SECRET_KEY),
+    ("spark.ndb.num_of_splits", VDB_SPLITS),
+    ("spark.ndb.num_of_sub_splits", VDB_SUBSPLITS),
+    ("spark.ndb.rowgroups_per_subsplit", "1"),
+    ("spark.ndb.query_data_rows_per_split", "4000000"),
+    ("spark.ndb.retry_max_count", "3"),
+    ("spark.ndb.retry_sleep_duration", "1"),
+    ("spark.ndb.parallel_import", "true"),
+    ("spark.ndb.dynamic_filter_compaction_threshold", "100"),
+    ("spark.ndb.dynamic_filtering_wait_timeout", "2"),
+    ("spark.sql.catalog.ndb", "spark.sql.catalog.ndb.VastCatalog"),
+    ("spark.sql.extensions", "ndb.NDBSparkSessionExtension")
+)
+# Iceberg config
+SPARK_ICEBERG_CONFIG = (
+    ("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"),
+    ("spark.sql.catalog.spark_catalog", "org.apache.iceberg.spark.SparkSessionCatalog"),
+    ("spark.sql.catalog.spark_catalog.type","hive"),
+    ("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog"),
+    ("spark.sql.catalog.local.type", "hive"),
+    ("spark.hadoop.hive.metastore.uris", HIVE_METASTORE),
+    ("spark.hadoop.mapreduce.outputcommitter.factory.scheme.s3a", "org.apache.hadoop.fs.s3a.commit.S3ACommitterFactory")
+)
+SPARK_S3A_CONFIG = (
+    ("spark.hadoop.fs.s3a.access.key", S3A_ACCESS_KEY), 
+    ("spark.hadoop.fs.s3a.secret.key", S3A_SECRET_KEY),
+    ("spark.hadoop.fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem"),
+    ("spark.hadoop.fs.s3a.experimental.input.fadvise", "random"),
+    ("spark.hadoop.fs.s3a.block.size", "4M"),
+    ("spark.hadoop.fs.s3a.readahead.range", "4M")
+)
+
+# For generic, non-AWS S3 targets
+SPARK_GENERIC_S3A_CONFIG = (
+    ("spark.hadoop.fs.s3a.endpoint", S3A_ENDPOINT),
+    ("spark.hadoop.fs.s3a.path.style.access", "true"),
+    ("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+)
+
+
+def dump_interactive():
+    sys.stdout.write("spark-sql --name {} \\\n".format(APP_NAME))
+    sys.stdout.write("  --master {} \\\n".format(SPARK_MASTER))
+    sys.stdout.write("  --conf spark.executor.memory={} \\\n".format(SPARK_EXEC_MEMORY))
+    sys.stdout.write("  --conf spark.driver.memory={} \\\n".format(SPARK_DRIVER_MEMORY))
+    sys.stdout.write("  --conf spark.executor.userClassPathFirst=true \\\n")
+    sys.stdout.write("  --conf spark.driver.userClassPathFirst=true \\\n")
+    if EXEC_MONITORING:
+        sys.stdout.write("  --conf spark.executor.extraJavaOptions=\"{}\" \\\n".format(EXEC_MONITORING_OPTIONS))
+    if DRIVER_MONITORING:
+        sys.stdout.write("  --conf spark.driver.extraJavaOptions=\"{}\" \\\n".format(DRIVER_MONITORING_OPTIONS))
+    if EXPLAIN:
+        sys.stdout.write("  --conf spark.sql.debug.maxToStringFields=100 \\\n")
+
+    if LOAD_VDB:
+        sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format(VDB_JARS))
+        sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format(VDB_JARS))
+        for cfg in SPARK_VDB_CONFIG:
+            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+    
+    if LOAD_ICEBERG:
+        sys.stdout.write("  --packages {} \\\n".format(ICEBERG_PACKAGE))
+        for cfg in SPARK_ICEBERG_CONFIG:
+            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+        for cfg in SPARK_S3A_CONFIG:
+            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+    if LOAD_ICEBERG and S3A_ENDPOINT:
+        for cfg in SPARK_GENERIC_S3A_CONFIG:
+            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+
+
+    
+    sys.stdout.flush()
+
 
 def config_connect():
 
@@ -45,24 +159,53 @@ def config_connect():
     conf.set("spark.driver.memory", SPARK_DRIVER_MEMORY)
     conf.set("spark.executor.userClassPathFirst", "true")
     conf.set("spark.driver.userClassPathFirst", "true")
-    conf.set("spark.sql.catalogImplementation", "in-memory")
     if EXEC_MONITORING:
         conf.set("spark.executor.extraJavaOptions", EXEC_MONITORING_OPTIONS)
     if DRIVER_MONITORING:
         conf.set("spark.driver.extraJavaOptions", DRIVER_MONITORING_OPTIONS)
     if EXPLAIN:
         conf.set("spark.sql.debug.maxToStringFields", "100")
-    spark = SparkSession.builder.config(conf=conf).getOrCreate()
+
+    if LOAD_VDB:
+        for cfg in SPARK_VDB_CONFIG:
+            conf.set(cfg[0], cfg[1])
     
+    if LOAD_ICEBERG:
+        for cfg in SPARK_ICEBERG_CONFIG:
+            conf.set(cfg[0], cfg[1])
+        for cfg in SPARK_S3A_CONFIG:
+            conf.set(cfg[0], cfg[1])
+    if LOAD_ICEBERG and S3A_ENDPOINT:
+        for cfg in SPARK_GENERIC_S3A_CONFIG:
+            conf.set(cfg[0], cfg[1])
+    
+    print(conf.getAll())
+
+    # Sloppy af
+    session = SparkSession.builder.appName(APP_NAME).enableHiveSupport()
+    spark = session.config(conf=conf).getOrCreate()
+    
+
     return spark
 
 
 if __name__ == "__main__":
 
-    if TPCDS_QUERY_SCALE_FACTOR == "sf10000":
-        queries = tpcds_10t_queries.queries
-    elif TPCDS_QUERY_SCALE_FACTOR == "sf1000":
-        queries = tpcds_1t_queries.queries
+    if DUMP_INTERACTIVE:
+        dump_interactive()
+        exit(0)
+
+
+    queries = []
+    if BENCHMARK == "tpcds":
+        if TPCDS_QUERY_SCALE_FACTOR == "sf10000":
+            queries = tpcds_10t_queries.queries
+        elif TPCDS_QUERY_SCALE_FACTOR == "sf1000":
+            queries = tpcds_1t_queries.queries
+    elif BENCHMARK == "tpcds_s":
+        sq = tpcds_selective_queries()
+        queries = sq.gen_all(args.tpcds_scale)
+
 
     prom = PrometheusConnect(
         url=PROMETHEUS_HOST,
@@ -115,42 +258,72 @@ if __name__ == "__main__":
 
             
             # Gather associated metrics
-            exec_cpu_data = prom.get_metric_range_data(
-                metric_name='node_cpu_seconds_total',
-                label_config={"job": EXEC_PROMETHEUS_JOB, "mode": "idle"},
-                start_time=then,
-                end_time=now
-            )
-            cnode_cpu_data = prom.get_metric_range_data(
-                metric_name='node_cpu_seconds_total',
-                label_config={"job": CNODE_PROMETHEUS_JOB, "mode": "idle"},
-                start_time=then,
-                end_time=now
-            )
-            exec_network_data_in = prom.get_metric_range_data(
-                metric_name='node_netstat_IpExt_InOctets',
-                label_config={"job": EXEC_PROMETHEUS_JOB},
-                start_time=then,
-                end_time=now
-            )
-            exec_network_data_out = prom.get_metric_range_data(
-                metric_name='node_netstat_IpExt_OutOctets',
-                label_config={"job": EXEC_PROMETHEUS_JOB},
-                start_time=then,
-                end_time=now
-            )
-            exec_disk_reads = prom.get_metric_range_data(
-                metric_name='node_disk_read_bytes_total',
-                label_config={"job": EXEC_PROMETHEUS_JOB},
-                start_time=then,
-                end_time=now
-            )
-            exec_disk_writes = prom.get_metric_range_data(
-                metric_name='node_disk_written_bytes_total',
-                label_config={"job": EXEC_PROMETHEUS_JOB},
-                start_time=then,
-                end_time=now
-            )
+            try:
+                exec_cpu_data = prom.get_metric_range_data(
+                    metric_name='node_cpu_seconds_total',
+                    label_config={"job": EXEC_PROMETHEUS_JOB, "mode": "idle"},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                exec_cpu_data = None
+                sys.stderr.write(str(e))
+            
+            try:
+                cnode_cpu_data = prom.get_metric_range_data(
+                    metric_name='node_cpu_seconds_total',
+                    label_config={"job": CNODE_PROMETHEUS_JOB, "mode": "idle"},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                cnode_cpu_data = None
+                sys.stderr.write(str(e))
+
+            try:
+                exec_network_data_in = prom.get_metric_range_data(
+                    metric_name='node_netstat_IpExt_InOctets',
+                    label_config={"job": EXEC_PROMETHEUS_JOB},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                exec_network_data_in = None
+                sys.stderr.write(str(e))
+            
+            try:
+                exec_network_data_out = prom.get_metric_range_data(
+                    metric_name='node_netstat_IpExt_OutOctets',
+                    label_config={"job": EXEC_PROMETHEUS_JOB},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                exec_network_data_out = None
+                sys.stderr.write(str(e))
+            
+            try:
+                exec_disk_reads = prom.get_metric_range_data(
+                    metric_name='node_disk_read_bytes_total',
+                    label_config={"job": EXEC_PROMETHEUS_JOB},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                exec_disk_reads = None
+                sys.stderr.write(str(e))
+                
+            try:
+                exec_disk_writes = prom.get_metric_range_data(
+                    metric_name='node_disk_written_bytes_total',
+                    label_config={"job": EXEC_PROMETHEUS_JOB},
+                    start_time=then,
+                    end_time=now
+                )
+            except Exception as e:
+                exec_disk_writes = None
+                sys.stderr.write(str(e))
+
             exec_cpus = prom_node_cpu_count(exec_cpu_data)
             cnode_cpus = prom_node_cpu_count(cnode_cpu_data)
             tnet_in = prom_node_net_rate(exec_network_data_in)

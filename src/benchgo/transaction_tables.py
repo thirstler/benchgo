@@ -12,12 +12,12 @@ def write_data(args, data):
                 s3prefix = args.s3prefix + '/'
             else:
                 s3prefix = args.s3prefix
+                
         full_key = s3prefix + "{}".format(obj_id)
             
-        
         if args.endpoint:
-            session = boto3.session.Session()
-            client = session.client(
+            s3con = boto3.session.Session()
+            client = s3con.client(
                 service_name='s3',
                 endpoint_url=args.endpoint,
             )

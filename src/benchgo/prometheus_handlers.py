@@ -4,6 +4,7 @@ import zlib
 import json
 
 def prom_node_cpu_util_rate(data, mode):
+    if data == None: return 0
     ttl_p = 0
     cpus = {}
 
@@ -27,6 +28,7 @@ def prom_node_cpu_util_rate(data, mode):
 
 
 def prom_node_net_rate(data):
+    if data == None: return 0
     ttl_r = 0
     instances = {}
 
@@ -43,6 +45,7 @@ def prom_node_net_rate(data):
 
 
 def prom_node_disk_rate(data):
+    if data == None: return 0
     ttl_r = 0
     instances = {}
     for metric in data:
@@ -59,6 +62,7 @@ def prom_node_disk_rate(data):
 
 
 def prom_node_cpu_count(data, ht=True):
+    if data == None: return 0
     cpu_count = 0
     for metric in data:
         if metric["metric"]["mode"] == "idle":
