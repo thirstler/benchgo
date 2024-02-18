@@ -13,11 +13,11 @@ if __name__ == "__main__":
     parser.add_argument("--ddl", action="store_true", help="generate SQL for creating target tables")
     parser.add_argument("--table-path", default="trns_abl", help="full path to table in generated SQL")
     parser.add_argument("--data", action="store_true", help="generate data for benchmarks")
-    parser.add_argument("--width-factor", default=1, help="width factor for data/ddl generation factor of 1=10 cols, factor of 10 = 100 cols, etc")
-    parser.add_argument("--jobs", default=1, help="when generating data, this is the total number of parallel jobs that you will run (1 job defaults to 100,000 records)")
-    parser.add_argument("--job", default=1, help="this is the job ID of THIS job")
-    parser.add_argument("--records-per-job", default=100000, help="number of rows/records to generate")
-    parser.add_argument("--sparsity", default=1.0, help="data sparsity in the table, e.g: 0.1 will populate aprox 10% of the fields")
+    parser.add_argument("--width-factor", default="1", help="width factor for data/ddl generation factor of 1=10 cols, factor of 10 = 100 cols, etc")
+    parser.add_argument("--jobs", default="1", help="when generating data, this is the total number of parallel jobs that you will run (1 job defaults to 100,000 records)")
+    parser.add_argument("--job", default="1", help="this is the job ID of THIS job")
+    parser.add_argument("--records-per-job", default="100000", help="number of rows/records to generate")
+    parser.add_argument("--sparsity", default="1.0", help="data sparsity in the table, e.g: 0.1 will populate aprox 10 perc of the fields")
 
     # Output options
     parser.add_argument("--dirout", default=None, help="place resultant CSV files in here")

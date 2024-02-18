@@ -52,7 +52,8 @@ if __name__ == "__main__":
     parser.add_argument("--update-del-tests-sf", default="sf1", help="scale factor for tests (sf1,sf10,sf100,sf1000 or sf10000)")
     parser.add_argument("--update-del-table", default=None, help="full path of table to run tests on (only works on tables prepared with mkdata utility)")
     parser.add_argument("--mp", default=1, help="client count for update/insert tests")
-
+    parser.add_argument("--merge-from-table", default=None, help="table (full path), to use as source for merge testing")
+    
     # VASTDB and endpoint options
     #parser.add_argument("--access-key", default=None, help="AWS-style access key")
     #parser.add_argument("--secret-key", default=None, help="AWS-style secret access key")

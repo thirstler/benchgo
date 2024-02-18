@@ -4,6 +4,20 @@ import boto3
 import sys
 import uuid
 
+class sf_cols:
+    
+    STR_COLS = 0
+    FLOAT_COLS = 0
+    INT_COLS = 0
+    BOOL_COLS= 0
+
+    def __init__(self, wf):
+        self.STR_COLS =  (wf*1) if (wf*1 <= 20) else 20
+        self.FLOAT_COLS = wf*5
+        self.INT_COLS = wf*3
+        self.BOOL_COLS= wf*2
+    
+
 def write_data(args, data):
     obj_id = uuid.uuid4()
     if args.s3out:
@@ -13,7 +27,7 @@ def write_data(args, data):
             else:
                 s3prefix = args.s3prefix
                 
-        full_key = s3prefix + "{}".format(obj_id)
+        full_key = "{}{}".format(s3prefix, obj_id)
             
         if args.endpoint:
             s3con = boto3.session.Session()
@@ -38,7 +52,7 @@ def write_data(args, data):
 
 def create_transaction_table(width_factor=1, table_path="trns_tbl"):
 
-    ddl = "CREATE TABLE {table} (".format(table=table_path)
+    ddl = "CREATE TABLE {table} (\n    ".format(table=table_path)
 
     columns = []
     # index/id
@@ -64,7 +78,7 @@ def create_transaction_table(width_factor=1, table_path="trns_tbl"):
     for n in range(0, width_factor*3):
         columns.append("int_val_{} INTEGER".format(n))
 
-    ddl = ddl + ",".join(columns) + ")"
+    ddl = ddl + ",\n    ".join(columns) + "\n)"
 
     print(ddl)
 
@@ -105,9 +119,11 @@ def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000
 
         col_data = []
 
+
+        col_count = sf_cols(width_factor)
+
         # Strings
-        str_cols = (width_factor*1) if (width_factor*1 <= 20) else 20
-        for n in range(0, str_cols):
+        for n in range(0, col_count.STR_COLS):
 
             if random.random() < sparsity:
                 col_data.append("{}".format(''.join(random.choices(string.ascii_letters, k=random.randrange(1,128)))))
@@ -115,7 +131,7 @@ def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000
                 col_data.append("")
 
         # Floats
-        for n in range(0, width_factor*5):
+        for n in range(0, col_count.FLOAT_COLS):
             if random.random() < sparsity:
                 col_data.append("{}".format(random.random()*10000))
             else:
@@ -123,14 +139,14 @@ def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000
    
     
         # Boolean data types:
-        for n in range(0, width_factor*2):
+        for n in range(0, col_count.BOOL_COLS):
             if random.random() < sparsity:
                 col_data.append("{}".format("true" if random.random() < 0.5 else "false"))
             else:
                 col_data.append("")
         
         # Integer data types:
-        for n in range(0, width_factor*3):
+        for n in range(0, col_count.INT_COLS):
             if random.random() < sparsity:
                 col_data.append("{}".format(
                     int(random.random()*(2**31)) if random.random() < 0.5 else -abs(int(random.random()*(2**31)))
