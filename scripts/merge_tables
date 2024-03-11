@@ -1,0 +1,29 @@
+#!/bin/env python3
+import argparse
+from benchgo.benchgo_trino import *
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Merge one table into another"
+    )
+
+    # Trino options
+    parser.add_argument("--trino-coordinator", default="http://localhost:8080", help="Trino coordinator URI (e.g.: http://trino_coord:8080)")
+    parser.add_argument("--trino-password", default=None, help="Trino password")
+    parser.add_argument("--trino-user", default='admin', help="Trino username")
+
+
+    
+    parser.add_argument("--source-table", required=True, default=None, help="merge FROM this table")
+    parser.add_argument("--dest-table", required=True, default=None, help="merge TO this table")
+    parser.add_argument("--on-key", required=True, default=None, help="key to merge on")
+    parser.add_argument("--noinsert", action="store_true", help="do not insert records no present in the destination table")
+    parser.add_argument("--noupdate", action="store_true", help="do not update records present in the testination table")
+    parser.add_argument("--force", action="store_true", help="add columns to the dest that are not already present")
+    parser.add_argument("--trino-catalog", default=None, help="catalog housing target tpcds database")
+    parser.add_argument("--trino-schema", default=None, help="schema housing target tpcds database")
+
+    args = parser.parse_args()
+
+    merge_tables(args)

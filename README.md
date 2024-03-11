@@ -1,6 +1,16 @@
 Running Benchmarks
 ==================
 
+Monitoring
+----------
+Output of benchmark scripts includes performance data polled from worker nodes to determine CPU utilization, network traffic and disk I/O during benchmarks. Prometheus is used for this, so you'll need to install Prometheus (and optionally Grafana) somewhere in the benchmark environment. Rough outline:
+
+1. Install Prometheus on a system separate from any benchmarkeds systems
+2. Install node_exporter and all worker systems and configure Prometheus to poll them under the same job (like "exec_cluster") using a 5 second polling interval.
+3. If benchmarking VAST, install and run a node_exporter on each CNode and group them under another job ("cnode_cluster").
+
+You'll specify the prometheus service when executing benchmark runs.
+
 Trino
 -----
 
@@ -29,10 +39,10 @@ Spark benchmarks are run by configuring the "benchgo_spark" script and then subm
 
 Iceberg
 
->   --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 \
->   --driver-class-path $(echo /opt/spark_vastdb/*.jar | tr ' ' ':') \
->   --conf spark.executor.extraClassPath=$(echo /opt/spark_vastdb/*.jar | tr ' ' ':') \
+    export SPARK_HOME=/usr/local/spark3
+    pyspark --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 < $(which benchgo_spark)
 
+    
 '''
  spark-sql --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 \
    --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \

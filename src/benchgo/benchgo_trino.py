@@ -18,15 +18,33 @@ import random
 import string
 import sys
 import trino
+from datetime import datetime
 
 # Configuration
 TRINO_SESSION={
-    "task_writer_count": 64
+    "task_writer_count": 64,
+    "task_concurrency": 64
 }
 # Base CPU utilization from VAST cnodes
 CNODE_BASE_CPU_UTIL=0.36
 UPDATE_TEST_COUNT=10000
 SIDE_TABLE_DDL="""CREATE TABLE {table} (id BIGINT)"""
+MERGE_TEMPLATE="""MERGE INTO {tgt_table} AS a USING {src_table} AS b 
+ON a.{key}=b.{key}
+WHEN MATCHED
+    THEN UPDATE SET {update_list}
+WHEN NOT MATCHED
+    THEN INSERT ({insert_field_list}) VALUES ({insert_list})"""
+
+MERGE_TEMPLATE_NI="""MERGE INTO {tgt_table} AS a USING {src_table} AS b 
+ON a.{key}=b.{key}
+WHEN MATCHED
+    THEN UPDATE SET {update_list}
+"""
+MERGE_TEMPLATE_NU="""MERGE INTO {tgt_table} AS a USING {src_table} AS b 
+ON a.{key}=b.{key}
+WHEN NOT MATCHED
+    THEN INSERT ({insert_field_list}) VALUES ({insert_list})"""
 
 def connection(args):
 
@@ -49,7 +67,7 @@ def connection(args):
     cur = conn.cursor()
     return cur
 
-def run(args):
+def run_trino(args):
 
     # Output file
     outdir = "/tmp/{}_{}".format(args.name, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
@@ -59,6 +77,9 @@ def run(args):
             tpcds(args, fh)
         elif args.benchmark == "update/delete":
             update_delete(args, fh)
+        fh.close()
+
+    print("outint in {}/timings.csv".format(outdir))
 
 
 def _update_slice(args, slice, offset, count, randkey, concurrancy):
@@ -126,12 +147,17 @@ def update_delete(args, th):
     
     ###########################################################################
     # Updates/deletes
+    actions = ["update", "delete"]
     op_list = [100, 1000, 10000]
     results = {}
+    for a in actions:
+        results[a] = {}
+        for o in op_list:
+            results[a][str(o)] = 0
+
     record_ptr = 0
-    for action in ["update", "delete"]:
+    for action in actions:
         th.write("{} timings\n".format(action))
-        results[action] = {}
         for batch_sz in op_list:
             th.write("record count,{}\n".format(UPDATE_TEST_COUNT))
             th.write("batch size,{}\n".format(batch_sz))
@@ -164,7 +190,7 @@ def update_delete(args, th):
                         updates.append("int_val_{}={}".format(
                             intids[s],
                             int(random.random()*(2**31)) if random.random() < 0.5 else -abs(int(random.random()*(2**31)))))
-                    for s in range(0, int(col_counts.FLOAT_COLS*0.25)+1):
+                    for s in range(0, int(col_counts.BOOL_COLS*0.25)+1):
                         updates.append("bool_val_{}={}".format(
                             boolids[s],
                             "true" if random.random() < 0.5 else "false"))
@@ -182,12 +208,13 @@ def update_delete(args, th):
                     predicates.append("id = {}".format(ids[record_ptr]))
                     record_ptr += 1
                 query += " OR ".join(predicates)
-                batch_start = time.time()
+                
                 try:
+                    batch_start = time.time()
                     tc.execute(query)
                     tc.fetchall()
                     elapsed = time.time()-batch_start
-                    results[action][str(batch_sz)] = elapsed
+                    results[action][str(batch_sz)] += elapsed
                     tracking_list.append("{:.2f}".format(elapsed))
                     sys.stdout.write("\rbatch {}: {:.2f} sec       ".format(count+1, elapsed))
                     sys.stdout.flush()
@@ -197,7 +224,7 @@ def update_delete(args, th):
             th.write("discrete {} timings,".format(action))
             th.write("{}\n".format(",".join(tracking_list)))
 
-            print("\r{:.2f} seconds to {} {} records in batches of {}".format(time.time()-start, action, UPDATE_TEST_COUNT, batch_sz))
+            print("\r{:.2f} seconds to {} {} records in batches of {}".format(results[action][str(batch_sz)], action, UPDATE_TEST_COUNT, batch_sz))
 
     th.write("overall timings by batch size\n")
     print("operation,{}".format(",".join([str(x) for x in op_list])))
@@ -210,7 +237,7 @@ def update_delete(args, th):
 
     ###########################################################################
     # Merge tests
-    sys.stdout.write("running merge delete tests....\nget 5 and 25 percentiles...")
+    sys.stdout.write("running merge delete tests....\nget 5 and 25 rowcount percentiles...")
     tc.execute("SELECT COUNT(*) FROM {}".format(args.update_del_table))
     rows = tc.fetchall()
     p5 = int(rows[0][0]*0.05)
@@ -221,12 +248,12 @@ def update_delete(args, th):
     th.write("5th percentile record count, {}\n".format(p5))
     th.write("25th percentile record count, {}\n".format(p25))
     th.write("load and merge timings:\n")
-    th.write("action,percentile,timing\n")
+    th.write("action/percentile,timing\n")
     # Create side-tables
     plist = {"p5": p5, "p25": p25}
     for per in plist:
 
-        sys.stdout.write("merge benchmark, {} records...".format(plist[per]))
+        sys.stdout.write("merge-delete benchmark, {} records...".format(plist[per]))
         sys.stdout.flush()
         side_table = '{catalog}.{schema}.{table}'.format(
             catalog=args.trino_catalog,
@@ -248,7 +275,7 @@ def update_delete(args, th):
         # end timing #
 
         print("\nload time ({}): {:.2f}".format(per, loadend-loadstart))
-        th.write("load,{},{:.2f}\n".format(per, loadend-loadstart))
+        th.write("load {},{:.2f}\n".format(per, loadend-loadstart))
 
         merge_q = "MERGE INTO {tgt_table} USING {src_table} ON {tgt_table}.id = {src_table}.id WHEN MATCHED THEN DELETE".format(
             tgt_table=args.update_del_table,
@@ -263,7 +290,7 @@ def update_delete(args, th):
         # end timing #
 
         print("merge time ({}): {:.2f}".format(per, merge_end-merge_start))
-        th.write("merge,{},{:.2f}\n".format(per, loadend-loadstart))
+        th.write("merge {},{:.2f}\n".format(per, merge_end-merge_start))
 
         tc.execute("DROP TABLE {}".format(side_table))
 
@@ -273,28 +300,56 @@ def update_delete(args, th):
 
         query = "SELECT COUNT(*) FROM {source}".format(source=args.merge_from_table)
         tc.execute(query)
-        res = tc.fetchall()
-        print("merging {} records into {} from {}".format(res[0][0], args.update_del_table, args.merge_from_table))
+        srcrecords = tc.fetchall()[0][0]
+        print("merging {} records into {} from {}".format(srcrecords, args.update_del_table, args.merge_from_table))
+        
+        query = "SELECT COUNT(*) FROM {source}".format(source=args.update_del_table)
+        before_rec = tc.execute(query).fetchall()[0][0]
 
-        query = "MERGE INTO {tgt_table} AS a USING {src_table} AS b ON a.id=b.id WHEN MATCHED THEN UPDATE SET {vals}".format(
+        query = MERGE_TEMPLATE.format(
+                key="id",
                 tgt_table=args.update_del_table,
                 src_table=args.merge_from_table,
-                vals=",".join(["str_val_{x}=b.str_val_{x}".format(x=x) for x in range(0,col_counts.STR_COLS)])+","+
+                update_list=",".join(["str_val_{x}=b.str_val_{x}".format(x=x) for x in range(0,col_counts.STR_COLS)])+","+
                     ",".join(["float_val_{x}=b.float_val_{x}".format(x=x) for x in range(0,col_counts.FLOAT_COLS)])+","+
                     ",".join(["int_val_{x}=b.int_val_{x}".format(x=x) for x in range(0,col_counts.INT_COLS)])+","+
-                    ",".join(["bool_val_{x}=b.bool_val_{x}".format(x=x) for x in range(0,col_counts.BOOL_COLS)])
+                    ",".join(["bool_val_{x}=b.bool_val_{x}".format(x=x) for x in range(0,col_counts.BOOL_COLS)]),
+                insert_field_list=",".join(["str_val_{x}".format(x=x) for x in range(0,col_counts.STR_COLS)])+","+
+                    ",".join(["float_val_{x}".format(x=x) for x in range(0,col_counts.FLOAT_COLS)])+","+
+                    ",".join(["int_val_{x}".format(x=x) for x in range(0,col_counts.INT_COLS)])+","+
+                    ",".join(["bool_val_{x}".format(x=x) for x in range(0,col_counts.BOOL_COLS)]),
+                insert_list=",".join(["b.str_val_{x}".format(x=x) for x in range(0,col_counts.STR_COLS)])+","+
+                    ",".join(["b.float_val_{x}".format(x=x) for x in range(0,col_counts.FLOAT_COLS)])+","+
+                    ",".join(["b.int_val_{x}".format(x=x) for x in range(0,col_counts.INT_COLS)])+","+
+                    ",".join(["b.bool_val_{x}".format(x=x) for x in range(0,col_counts.BOOL_COLS)])
             )
 
-        merge_start = time.time()
-        tc.execute(query)
-        tc.fetchall()
-        merge_end = time.time()
-        print("merge time: {:.2f}s".format(merge_end-merge_start))
-        th.write("merge records,{}\n".format(res[0][0]))
-        th.write("merge time,{:.2f}\n".format(merge_end-merge_start))
+        try:
+            merge_start = time.time()
+            tc.execute(query)
+            tc.fetchall()
+            merge_end = time.time()
+
+            query = "SELECT COUNT(*) FROM {source}".format(source=args.update_del_table)
+            after_rec = tc.execute(query).fetchall()[0][0]
+
+            print("merge time: {:.2f}s".format(merge_end-merge_start))
+            th.write("merge record source rows,{}\n".format(srcrecords))
+            th.write("destination size before,{}\n".format(before_rec))
+            th.write("destination size after,{}\n".format(after_rec))
+            th.write("increase,{:.2f}\n".format(after_rec-before_rec))
+            th.write("merge time,{:.2f}\n".format(merge_end-merge_start))
+        except:
+            print("gah, fuck. merge failed. oh well...")
+            th.write("merge record source rows,-1\n")
+            th.write("destination size before,-1\n")
+            th.write("destination size after,-1\n")
+            th.write("increase,-1.0\n")
+            th.write("merge time,-1.0\n")
 
     else:
         print("no source table for UPDATE merge test specified, skipping")
+
 
 def tpcds(args, th):
     queries = []
@@ -471,3 +526,86 @@ def tpcds(args, th):
     dump_stats(prom, benchmark_start_time, benchmark_end_time, outdir)
     print("done")
 
+
+def merge_tables(args):
+
+    tc = connection(args)
+
+    # get source and dest schemas + sanity check
+    try:
+        src_schema = tc.execute("DESCRIBE {}".format(args.source_table)).fetchall()
+    except Exception as e:
+        print(e)
+        print("\n\nmissing source table? ({})".format(args.source_table))
+        exit(1)
+        
+
+    try:
+        tgt_schema = tc.execute("DESCRIBE {}".format(args.dest_table)).fetchall()
+    except Exception as e:
+        print(e)
+        print("\n\nmissing destination table? ({})".format(args.dest_table))
+        exit(1)
+
+    
+    src_schema.sort()
+    tgt_schema.sort()
+
+    if src_schema != tgt_schema:
+        print("source and target schema do not match:")
+        print("-"*12 + "source" + "-"*12 +  "|" + "-"*9 + "destination" + "-"*10)
+        for r in range(0, len(src_schema) if len(src_schema) > len(tgt_schema) else len(tgt_schema)):
+            if len(src_schema) > r:
+                sys.stdout.write("{:<30}".format("{}:{}".format(src_schema[r][0], src_schema[r][1])))
+            else:
+                sys.stdout.write("{:^30}".format("-"))
+            sys.stdout.write("|")
+            if len(tgt_schema) > r:
+                sys.stdout.write("{:<30}\n".format("{}:{}".format(tgt_schema[r][0], tgt_schema[r][1])))
+            else:
+                sys.stdout.write("{:^30}\n".format("-"))
+        sys.stdout.flush()
+
+        if args.force:
+            pass
+        else:
+            exit(1)
+    
+    if not args.noupdate and not args.noinsert:
+        field_updates = ",".join(["{x}=b.{x}".format(x=x[0]) for x in src_schema if x != args.on_key])
+        insert_field_list = ",".join(["{}".format(x[0]) for x in src_schema if x != args.on_key])
+        insert_list = ",".join(["b.{}".format(x[0]) for x in src_schema if x != args.on_key])
+        query = MERGE_TEMPLATE.format(
+            tgt_table=args.dest_table,
+            src_table=args.source_table,
+            key=args.on_key,
+            update_list=field_updates,
+            insert_field_list=insert_field_list,
+            insert_list=insert_list
+        )
+    
+    if not args.noupdate and args.noinsert:
+        field_updates = ",".join(["{x}=b.{x}".format(x=x[0]) for x in src_schema if x != args.on_key])
+        query = MERGE_TEMPLATE_NI.format(
+            tgt_table=args.dest_table,
+            src_table=args.source_table,
+            key=args.on_key,
+            update_list=field_updates
+        )
+    
+    if args.noupdate and not args.noinsert:
+        insert_field_list = ",".join(["{}".format(x[0]) for x in src_schema if x != args.on_key])
+        insert_list = ",".join(["b.{}".format(x[0]) for x in src_schema if x != args.on_key])
+        query = MERGE_TEMPLATE_NU.format(
+            tgt_table=args.dest_table,
+            src_table=args.source_table,
+            key=args.on_key,
+            insert_field_list=insert_field_list,
+            insert_list=insert_list
+        )
+
+        res = tc.execute(query)
+        res.fetchall()
+        print("done?")
+            
+    

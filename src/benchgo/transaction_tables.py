@@ -44,52 +44,100 @@ def write_data(args, data):
         print("done")
 
     elif args.dirout:
-        with open("{dir}/{uuid}".format(args.dirout, uuid=obj_id)) as fh:
+        fn = "{dir}/{uuid}".format(dir=args.dirout, uuid=obj_id)
+        with open(fn, "w") as fh:
+            print(fn)
             for row in data:
                 fh.write("{}\n".format(row))
             fh.close()
 
 
 def create_transaction_table(width_factor=1, table_path="trns_tbl"):
+    print(mk_ddl_sql(width_factor, table_path))
 
-    ddl = "CREATE TABLE {table} (\n    ".format(table=table_path)
+def mk_ddl_sql(width_factor, table_path, if_not_exists=False, table_format=None):
+
+    ddl = "CREATE TABLE{ine}{table} (\n    ".format(
+        ine=" IF NOT EXISTS " if if_not_exists else "",
+        table=table_path)
+
+    schema = mk_schema(width_factor)
 
     columns = []
-    # index/id
-    columns.append("id BIGINT")
+    for field, type in schema:
+        columns.append("{} {}".format(field, type))
 
-    # String record ID
-    columns.append("record_id VARCHAR(255)")
+    ddl = ddl + ",\n    ".join(columns) + "\n)"
+
+    if table_format:
+
+        ddl += " USING {table_format}".format(table_format=table_format)
+
+    return ddl
+
+
+def mk_schema(width_factor):
+
+    columns = [("id", "BIGINT"), ("record_id", "VARCHAR(255)")]
 
     # String data types:
     str_cols = (width_factor*1) if (width_factor*1 <= 20) else 20
     for n in range(0, str_cols):
-        columns.append("str_val_{} VARCHAR(255)".format(n))
-
+        columns.append( ("str_val_{}".format(n), "VARCHAR(255)") )
     # Float data types:
     for n in range(0, width_factor*5):
-        columns.append("float_val_{} REAL".format(n))
-    
+        columns.append( ("float_val_{}".format(n), "REAL") )
     # Boolean data types:
     for n in range(0, width_factor*2):
-        columns.append("bool_val_{} BOOLEAN".format(n))
-    
+        columns.append( ("bool_val_{}".format(n), "BOOLEAN") )
     # Integer data types:
     for n in range(0, width_factor*3):
-        columns.append("int_val_{} INTEGER".format(n))
+        columns.append( ("int_val_{}".format(n), "INTEGER") )
 
-    ddl = ddl + ",\n    ".join(columns) + "\n)"
+    return columns
+    
 
-    print(ddl)
+def mk_row(id, width_factor, sparsity):
+
+    record_id = "{}".format(''.join(random.choices(string.ascii_letters, k=16)))
+    col_data = (id, record_id)
+    col_count = sf_cols(width_factor)
+
+    # Strings
+    for n in range(0, col_count.STR_COLS):
+
+        if random.random() < sparsity:
+            col_data += (''.join(random.choices(string.ascii_letters, k=random.randrange(1,128))),)
+        else:
+            col_data += ("",)
+
+    # Floats
+    for n in range(0, col_count.FLOAT_COLS):
+        if random.random() < sparsity:
+            col_data += (random.random()*10000,)
+        else:
+            col_data += (None,)
 
 
-def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000, limit=1073741824):
+    # Boolean data types:
+    for n in range(0, col_count.BOOL_COLS):
+        if random.random() < sparsity:
+            col_data += (True if random.random() < 0.5 else False,)
+        else:
+            col_data += (None,)
+    
+    # Integer data types:
+    for n in range(0, col_count.INT_COLS):
+        if random.random() < sparsity:
+            col_data += (int(random.random()*(2**31)) if random.random() < 0.5 else -abs(int(random.random()*(2**31))),)
+        else:
+            col_data += (None,)
 
-    records = jobs*multiplier
 
-    r10000 = 10000/records
-    r1000 = 1000/records
-    r100 = 100/records
+    return col_data
+
+
+def mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit=1073741824):
 
     start = (job-1) * multiplier
     end = job * multiplier
@@ -98,69 +146,14 @@ def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000
     data_block = []
     for id in range(start, end):
 
-        prefix = None
-        if random.random() < r100:
-            prefix = "r100xx"
-        elif random.random() < r1000+r100:
-            prefix = "r1000x"
-        elif random.random() < r10000+r1000:
-            prefix = "r10000"
+        data = mk_row(id, width_factor, sparsity)
 
-        record_id = "{}".format(''.join(random.choices(string.ascii_letters, k=16)))
-
-        if prefix:
-            record_id = "{}{}".format(prefix, record_id[6:])
-            #print(record_id)
-
-        row = "{id}|{record_id}|".format(
-            id=id,
-            record_id=record_id
-        )
-
-        col_data = []
-
-
-        col_count = sf_cols(width_factor)
-
-        # Strings
-        for n in range(0, col_count.STR_COLS):
-
-            if random.random() < sparsity:
-                col_data.append("{}".format(''.join(random.choices(string.ascii_letters, k=random.randrange(1,128)))))
-            else:
-                col_data.append("")
-
-        # Floats
-        for n in range(0, col_count.FLOAT_COLS):
-            if random.random() < sparsity:
-                col_data.append("{}".format(random.random()*10000))
-            else:
-                col_data.append("")
-   
-    
-        # Boolean data types:
-        for n in range(0, col_count.BOOL_COLS):
-            if random.random() < sparsity:
-                col_data.append("{}".format("true" if random.random() < 0.5 else "false"))
-            else:
-                col_data.append("")
-        
-        # Integer data types:
-        for n in range(0, col_count.INT_COLS):
-            if random.random() < sparsity:
-                col_data.append("{}".format(
-                    int(random.random()*(2**31)) if random.random() < 0.5 else -abs(int(random.random()*(2**31)))
-                ))
-            else:
-                col_data.append("")
-        
-        row += "|".join(col_data)
+        row = "|".join([str(x) for x in data])
         size_in_ch += len(row)
-
         data_block.append(row)
 
-        if len(data_block) % 1000 == 0:
-            sys.stdout.write("\r{} bytes".format(size_in_ch))
+        #if len(data_block) % 1000 == 0:
+        #    sys.stdout.write("\r{} bytes".format(size_in_ch))
 
         if size_in_ch > int(limit):
             write_data(args, data_block)
@@ -168,5 +161,6 @@ def mk_data(args, width_factor=1, jobs=1, job=1, sparsity=1.0, multiplier=100000
             data_block.clear()
 
     write_data(args, data_block)
+
     return data_block
 

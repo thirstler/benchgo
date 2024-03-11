@@ -36,18 +36,17 @@ if __name__ == "__main__":
         create_transaction_table(width_factor=int(args.width_factor), table_path=args.table_path)
     
     if args.data:
-        sys.stdout.write("generating data...")
+        sys.stdout.write("generating data...\n")
         sys.stdout.flush()
         rows = mk_data(
             args,
             width_factor=int(args.width_factor),
-            jobs=int(args.jobs),
             job=int(args.job),
             sparsity=float(args.sparsity),
             multiplier=int(args.records_per_job),
             limit=int(args.charlimit)
         )
-        print("done")
+        print("\ndone")
         
 
             

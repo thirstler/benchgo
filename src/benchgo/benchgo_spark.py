@@ -1,232 +1,491 @@
-import os, sys, json, random, datetime, time
+import os, sys, json, random, datetime, time, yaml
 from prometheus_api_client import PrometheusConnect
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
+from pyspark.sql.functions import col, countDistinct
 from benchgo.tpcds_sf10000_queries import *
 from benchgo.tpcds_sf1000_queries import *
 from benchgo.tpcds_selective_queries import *
+from benchgo.transaction_tables import *
 from benchgo.prometheus_handlers import *
+from pathlib import Path
 
+class spcfg:
 
-def dump_interactive(scfg):
+    active = None
 
-    sys.stdout.write("spark-sql --name {} \\\n".format(scfg.APP_NAME))
-    sys.stdout.write("  --master {} \\\n".format(scfg.SPARK_MASTER))
-    sys.stdout.write("  --conf spark.executor.memory={} \\\n".format(scfg.SPARK_EXEC_MEMORY))
-    sys.stdout.write("  --conf spark.driver.memory={} \\\n".format(scfg.SPARK_DRIVER_MEMORY))
-    sys.stdout.write("  --conf spark.executor.userClassPathFirst=true \\\n")
-    sys.stdout.write("  --conf spark.driver.userClassPathFirst=true \\\n")
-    if scfg.EXEC_MONITORING:
-        sys.stdout.write("  --conf spark.executor.extraJavaOptions=\"{}\" \\\n".format(scfg.EXEC_MONITORING_OPTIONS))
-    if scfg.DRIVER_MONITORING:
-        sys.stdout.write("  --conf spark.driver.extraJavaOptions=\"{}\" \\\n".format(scfg.DRIVER_MONITORING_OPTIONS))
-    if scfg.EXPLAIN:
-        sys.stdout.write("  --conf spark.sql.debug.maxToStringFields=100 \\\n")
+    def __init__(self, section="default"):
 
-    if scfg.LOAD_VDB:
-        sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format(scfg.VDB_JARS))
-        sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format(scfg.VDB_JARS))
-        for cfg in scfg.SPARK_VDB_CONFIG:
-            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+        config_path = "{}/.benchgo/benchgo_spark.yaml".format(Path.home())
+        with open(config_path, "r") as fh:
+            self.cfg = yaml.safe_load(fh)["config"]
+
+    def get(self, key_path):
+        path = key_path.split(".")
+        val = self.cfg
+        for i in path:
+            try:
+                val = val[i]
+            except KeyError:
+                return None
+            except TypeError:
+                return None
+        return val
+
     
-    if scfg.LOAD_ICEBERG:
-        sys.stdout.write("  --packages {} \\\n".format(scfg.ICEBERG_PACKAGE))
-        for cfg in scfg.SPARK_ICEBERG_CONFIG:
-            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
-        for cfg in scfg.SPARK_S3A_CONFIG:
-            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
-    if scfg.LOAD_ICEBERG and scfg.S3A_ENDPOINT:
-        for cfg in scfg.SPARK_GENERIC_S3A_CONFIG:
-            sys.stdout.write("  --conf {}=\"{}\" \\\n".format(cfg[0], cfg[1]))
+    
+def dump_interactive(scfg):
+    """
+    This is pretty fragile and needs to be updated manually. As it's for
+    convenience purposes this is probably ok.  
+    """
+    
+    conf_vals = config_block(scfg)
+    sys.stdout.write("spark-sql ")
+    if scfg.get("iceberg.enable"):
+        try:
+            sys.stdout.write("  --packages {} \\\n".format(os.environ["ICEBERG_PACKAGE"]))
+        except:
+            sys.stdout.write("  --packages {} \\\n".format("[ICEBERG PACKAGE NAME]"))
+
+
+    if scfg.get("vdb.enable"):
+        try:
+            sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format(os.environ["VAST_CONNECTOR"]))
+            sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format(os.environ["VAST_CONNECTOR"])) 
+        except:
+            sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format("/path/to/vdb/jars"))
+            sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format("/path/to/vdb/jars")) 
+
+    sys.stdout.write("  --master {} \\\n".format(scfg.get("job.spark_master")))
+    sys.stdout.write("  --conf spark.executor.instances={} \\\n".format(scfg.get("job.num_exec")))
+    sys.stdout.write("  --conf spark.executor.cores={} \\\n".format(scfg.get("job.num_cores")))
+    sys.stdout.write("  --conf spark.executor.memory={} \\\n".format(scfg.get("job.exec_memory")))
+    sys.stdout.write("  --conf spark.driver.memory={} \\\n".format(scfg.get("job.driver_memory")))
+
+    for key, val in conf_vals:
+        sys.stdout.write("  --conf {key}=\"{val}\" \\\n".format(key=key, val=val))
+
+    sys.stdout.write("  --name {}\n\n".format(scfg.get("job.app_name")))
 
     sys.stdout.flush()
+
+
+def config_block(scfg):
+    conf_vals = []
+
+    # Static stuff
+    conf_vals.append(("spark.ui.showConsoleProgress", "false"))
+    conf_vals.append(("spark.executor.userClassPathFirst", "true"))
+    conf_vals.append(("spark.driver.userClassPathFirst", "true"))
+
+    # Configured
+    conf_vals.append(("spark.executor.instances", scfg.get("job.num_exec")))
+    conf_vals.append(("spark.executor.cores", scfg.get("job.num_cores")))
+    conf_vals.append(("spark.executor.memory", scfg.get("job.exec_memory")))
+    conf_vals.append(("spark.driver.memory", scfg.get("job.driver_memory")))
+
+    if scfg.get("exec_monitor.enabled"):
+        conf_vals.append(("spark.executor.extraJavaOptions", scfg.get("exec_monitor.opts")))
+    if scfg.get("driver_monitor.enabled"):
+        conf_vals.append(("spark.driver.extraJavaOptions", scfg.get("driver_monitor.opts")))
+
+    if scfg.get("tpcds.explain") or scfg.get("tpcds_selective.explain"):
+        conf_vals.append(("spark.sql.debug.maxToStringFields", "100"))
+
+    if scfg.get("vdb.enable"):
+
+        # basic config
+        conf_vals.append( ("spark.ndb.endpoint", scfg.get("vdb.endpoint")) )
+        conf_vals.append( ("spark.ndb.data_endpoints", scfg.get("vdb.endpoints")) )
+        conf_vals.append( ("spark.ndb.access_key_id", scfg.get("vdb.access_key")) )
+        conf_vals.append( ("spark.ndb.secret_access_key", scfg.get("vdb.secret_key")) )
+        conf_vals.append( ("spark.ndb.num_of_splits", scfg.get("vdb.splits")) )
+        conf_vals.append( ("spark.ndb.num_of_sub_splits", scfg.get("vdb.subsplits")) )
+
+        # Advanced and static config
+        for key, val in scfg.get("vdb_config").items():
+            conf_vals.append( (key, val) )
+
+    if scfg.get("iceberg.enable"):
+
+        # Basic config
+        conf_vals.append( ("spark.hadoop.fs.s3a.endpoint", scfg.get("iceberg.s3_endpoint")) )
+        conf_vals.append( ("spark.hadoop.hive.metastore.uris", scfg.get("iceberg.metastore_uri")) )
+        conf_vals.append( ("spark.hadoop.fs.s3a.access.key", scfg.get("iceberg.access_key")) )
+        conf_vals.append( ("spark.hadoop.fs.s3a.secret.key", scfg.get("iceberg.secret_key")) )
+
+        # Advanced and static config
+        for key, val in scfg.get("iceberg_config").items():
+            conf_vals.append( (key, val) )
+    
+    return conf_vals
 
 
 def config_connect(scfg):
 
     conf = SparkConf()
-    conf.setAppName(scfg.APP_NAME)
-    conf.setMaster(scfg.SPARK_MASTER)
-    conf.set("spark.executor.instances", scfg.SPARK_NUM_EXEC)
-    conf.set("spark.executor.cores", scfg.SPARK_EXEC_CORES)
-    conf.set("spark.executor.memory", scfg.SPARK_EXEC_MEMORY)
-    conf.set("spark.driver.memory", scfg.SPARK_DRIVER_MEMORY)
-    conf.set("spark.ui.showConsoleProgress", "false")
-    conf.set("spark.executor.userClassPathFirst", "true")
-    conf.set("spark.driver.userClassPathFirst", "true")
-    if scfg.EXEC_MONITORING:
-        conf.set("spark.executor.extraJavaOptions", scfg.EXEC_MONITORING_OPTIONS)
-    if scfg.DRIVER_MONITORING:
-        conf.set("spark.driver.extraJavaOptions", scfg.DRIVER_MONITORING_OPTIONS)
-    if scfg.EXPLAIN:
-        conf.set("spark.sql.debug.maxToStringFields", "100")
-
-    if scfg.LOAD_VDB:
-        for cfg in scfg.SPARK_VDB_CONFIG:
-            conf.set(cfg[0], cfg[1])
     
-    if scfg.LOAD_ICEBERG:
-        for cfg in scfg.SPARK_ICEBERG_CONFIG:
-            conf.set(cfg[0], cfg[1])
-        for cfg in scfg.SPARK_S3A_CONFIG:
-            conf.set(cfg[0], cfg[1])
-    if scfg.LOAD_ICEBERG and scfg.S3A_ENDPOINT:
-        for cfg in scfg.SPARK_GENERIC_S3A_CONFIG:
-            conf.set(cfg[0], cfg[1])
+    conf.setAppName(scfg.get("job.app_name"))
+    conf.setMaster(scfg.get("job.spark_master"))
+
+    conf_vals = config_block(scfg)
+    for c in conf_vals:
+        print("{} -> {}".format(c[0], c[1]))
+        conf.set(c[0], c[1])
     
     for c in conf.getAll():
         print("{: >40}: {}".format(c[0], c[1]))
 
     # Sloppy af
-    session = SparkSession.builder.appName(scfg.APP_NAME).enableHiveSupport()
+    session = SparkSession.builder.appName(scfg.get("job.app_name")).enableHiveSupport()
     spark = session.config(conf=conf).getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
     return spark
 
 
+def _run_inserts(scfg):
 
-def run_update_delete(scfg):
+    outdir = "/tmp/{}_{}".format(scfg.get("job.app_name"), datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    os.mkdir(outdir)
+    th = open("{outdir}/timings.csv".format(outdir=outdir), "w")
+
+    spark = config_connect(scfg)
+    sys.stdout.write("get col width factor....")
+
+    res = spark.read.table(scfg.get("insert.target_table")).limit(1)
+    tw = len(res.columns)
+    if tw > 10000:
+        width_factor = 1000
+    elif tw > 1000:
+        width_factor = 100
+    elif tw > 100:
+        width_factor = 10
+    elif tw > 10:
+        width_factor = 1
+    else:
+        width_factor = -1
+
+    print("({})".format(width_factor))
+    col_counts = sf_cols(width_factor)
+
+    sys.stdout.write("get row count factor...(range-size/row-count): ")
+    sys.stdout.flush()
+
+    res = spark.sql("SELECT MIN(id) AS min, MAX(id) AS max FROM {table}".format(table=scfg.get("insert.target_table"))).collect()
+    print("{}/{}".format(int(res[0].max), int(res[0].min)))
+    
+
+    op_list = scfg.get("insert.batch_size")
+    results = {}
+    for o in op_list:
+        results[o] = 0
+
+    record_id = res[0].max
+    th.write("insert timings\n")
+    for batch_sz in op_list:
+        th.write("record count,{}\n".format(scfg.get("insert.record_count")))
+        th.write("batch size,{}\n".format(batch_sz))
+        print("insert {} records in batches of {}".format(scfg.UPDATE_TEST_COUNT, batch_sz))
+        
+        for count in range(0, scfg.UPDATE_TEST_COUNT, batch_sz):
+            rows = []
+            tracking_list = []
+            for br in range(0, batch_sz):
+                record_id += 1
+                cols = {}
+                
+                # Build row
+                cols["id"] = record_id
+                cols["record_id"] = "{}".format(''.join(random.choices(string.ascii_letters, k=16)))
+                for s in range(0, int(col_counts.STR_COLS)):
+                    cols["str_val_{}".format(s)] = ''.join(random.choices(string.ascii_letters, k=random.randrange(1,128)))
+                for s in range(0, int(col_counts.FLOAT_COLS)):
+                    cols["float_val_{}".format(s)] = random.random()*10000          
+                for s in range(0, int(col_counts.INT_COLS)):
+                    cols["int_val_{}".format(s)] = int(random.random()*(2**31)) if random.random() < 0.5 else -abs(int(random.random()*(2**31)))
+                for s in range(0, int(col_counts.BOOL_COLS)):
+                    cols["bool_val_{}".format(s)] = True if random.random() < 0.5 else False
+                rows.append(cols)
+
+            df = spark.createDataFrame(rows)
+            
+            try:
+                batch_start = time.time()
+                df.write.mode("append").save(scfg.TARGET_TABLE)
+                elapsed = time.time()-batch_start
+                results[batch_sz] += elapsed
+                tracking_list.append("{:.2f}".format(elapsed))
+                sys.stdout.write("\rbatch {}: {:.2f} sec       ".format(count+1, elapsed))
+                sys.stdout.flush()
+            except Exception as e:
+                sys.stdout.write("\nprobem with insert: {}\n".format(e))
+
+        th.write("discrete insert timings,")
+        th.write("{}\n".format(",".join(tracking_list)))
+
+        print("\r{:.2f} seconds to insert {} records in batches of {}".format(results[batch_sz], scfg.UPDATE_TEST_COUNT, batch_sz))
+
+    th.write("overall timings by batch size\n")
+    print("operation,{}".format(",".join([str(x) for x in op_list])))
+
+    for o in results:
+        th.write("{},{}\n".format(o, results[o]))
+
+    th.close()
+
+
+def run_inserts(scfg):
 
     spark = config_connect(scfg)
 
-    sys.stdout.write("determine ID range...")
-    sys.stdout.flush()
-    res = spark.sql("SELECT MIN(id) AS min, MAX(id) AS max FROM {spark_catalog}.{spark_database}.{table}".format(
-            spark_catalog=scfg.SPARK_CATALOG,
-            spark_database=scfg.SPARK_DATABASE,
-            table=scfg.TARGET_TABLE
-        )
-    )
-    src_tbl_rows = res.collect()
+    record_count = scfg.get("insert.record_count")
+    num_cores = scfg.get("job.num_cores")
+    num_exec =scfg.get("job.num_exec")
+    col_scale = scfg.get("insert.col_scale")
+    sparsity = scfg.get("insert.sparsity")
+    batch_size = scfg.get("insert.batch_size")
+    target_table = scfg.get("insert.target_table")
+    iterations = scfg.get("insert.iterations")
 
-    print("done ({})".format(int(src_tbl_rows[0][1])-int(src_tbl_rows[0][0])))
-    ids = []
-    for x in range(0,60000):
-        ids.append(random.randrange(src_tbl_rows[0][0],src_tbl_rows[0][1]))
+    # make a place
+    spark.sql(mk_ddl_sql(col_scale, target_table, if_not_exists=True, table_format=scfg.get("insert.table_format")))
 
-    results = {}
+    for r in scfg.get("insert.batch_size"):
 
-    ##
-    # Updates/deletes
-    record_ptr = 0
-    for action in ["update", "delete"]:
-        results[action] = {}
-        for batch_sz in [100,1000,10000]:
+        timings=[]
+
+        start = time.time()
+        rdd = spark.sparkContext.parallelize(
+            range(0, r), num_cores * num_exec).map(lambda x: mk_row(x, col_scale, sparsity),)
+        df = spark.createDataFrame(rdd,
+            schema=[x[0] for x in mk_schema(col_scale)]).cache()
+        res = df.select(countDistinct("id")).collect()
+        print("generated {} distinct rows in {:.2f} secs".format(res[0][0], time.time()-start))
+
+        for test in range(0, iterations):
+
             start = time.time()
-            print("{} {} records in batches of {}".format(action, scfg.UPDATE_TEST_COUNT, batch_sz))
-            tracking_list = []
-            for count,row in enumerate(range(0,scfg.UPDATE_TEST_COUNT, batch_sz)):
-                if action == "update":
-                    query = "UPDATE {spark_catalog}.{spark_database}.{table} SET str_val_0='updated in batch size #{batchset}',float_val_0=3.14159265359,bool_val_0=true,int_val_0=42 WHERE ".format(
-                        spark_catalog=scfg.SPARK_CATALOG,
-                        spark_database=scfg.SPARK_DATABASE,
-                        table=scfg.TARGET_TABLE,
-                        batchset=batch_sz
-                    )
-                else:
-                    query = "DELETE FROM {spark_catalog}.{spark_database}.{table} WHERE ".format(
-                        spark_catalog=scfg.SPARK_CATALOG,
-                        spark_database=scfg.SPARK_DATABASE,
-                        table=scfg.TARGET_TABLE
-                    )
-                predicates = []
-                for b in range(0, batch_sz):
-                    predicates.append("id = {}".format(ids[record_ptr]))
-                    record_ptr += 1
-                query += " OR ".join(predicates)
-                batch_start = time.time()
-                try:
-                    res = spark.sql(query)
-                    elapsed = time.time()-batch_start
-                    results[action][str(batch_sz)] = elapsed
-                    tracking_list.append("{:.2f}".format(elapsed))
-                    sys.stdout.write("\rbatch {}: {:.2f} sec       ".format(count+1, elapsed))
-                    sys.stdout.flush()
-                except Exception as e:
-                    print("problem with {}, this benchmark is invalid".format(action.upper()))
-                    if scfg.VERBOSE:
-                        print(e)
-
-            print("")
-            print(",".join(tracking_list))
-            print("{:.2f} seconds to {} {} records in batches of {}".format(time.time()-start, action, scfg.UPDATE_TEST_COUNT, batch_sz))
+            df.writeTo(target_table).append()
+            timings.append(time.time()-start) 
+            sys.stdout.write("{}: {} records, {:.2f}s\n".format(test, r, timings[-1]))
         
-        clean_up_time = time.time()
-        # After each set (update/delete), fix the hash-meal that gets left behind, include in timings
-        """CALL spark_catalog.system.expire_snapshots(table => 'trns_tbl_ice.ice_t1c1r', older_than => TIMESTAMP '2024-02-14 22:36:28.867')"""
+        print("{:.2f} rows/s\n".format(r/(sum(timings)/len(timings))))
 
-        print('expiring snapshots...')
-        try: 
-            spark.sql("CALL {spark_catalog}.system.expire_snapshots(table => '{spark_database}.{table}', older_than => TIMESTAMP '{timestamp}')".format(
-                spark_catalog=scfg.SPARK_CATALOG,
-                spark_database=scfg.SPARK_DATABASE,
-                table=scfg.TARGET_TABLE,
-                timestamp=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            ))
-        except Exception as e:
-            print("bad CALL (system.expire_snapshots), probably not an iceberg table, skipping")
-            
-        
-        print('compacting files...')
-        try:
-            spark.sql("CALL {spark_catalog}.system.rewrite_data_files(table => '{spark_database}.{table}')".format(
+
+
+def run_update_delete(scfg):
+
+    outdir = "/tmp/{}_{}".format(scfg.APP_NAME, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    os.mkdir(outdir)
+
+    spark = config_connect(scfg)
+
+    with open("{outdir}/timings.csv".format(outdir=outdir), "w") as th:
+
+        th.write("update timings\n")
+        sys.stdout.write("determine ID range...")
+        sys.stdout.flush()
+
+        res = spark.sql("SELECT MIN(id) AS min, MAX(id) AS max FROM {spark_catalog}.{spark_database}.{table}".format(
                 spark_catalog=scfg.SPARK_CATALOG,
                 spark_database=scfg.SPARK_DATABASE,
                 table=scfg.TARGET_TABLE
-            ))
-        except Exception as e:
-            print("bad CALL (system.rewrite_data_files), probably not an iceberg table, skipping")
+            )
+        )
+        src_tbl_rows = res.collect()
+        id_range_len = int(src_tbl_rows[0][1])-int(src_tbl_rows[0][0])
+        print("done ({})".format(id_range_len))
+        ids = []
+        for x in range(0,60000):
+            ids.append(random.randrange(src_tbl_rows[0][0],src_tbl_rows[0][1]))
 
-        print("clean-up after {action}: {time} sc".format(action=action, time="{:2f}".format(time.time()-clean_up_time)))
+        results = {}
 
-    print("timings by batch size:\n")
-    print("----------------------\n")
-    sys.stdout.write("operation")
-    for r in results["update"]:
-        sys.stdout.write(",{}".format(r))
-    for r in results:
-        sys.stdout.write("{},".format(r))
-        cols = []
-        for c in results[r]:
-            cols.append("{:2f}".format(results[r][c]))
-        print(",".join(cols))
+        ##
+        # Updates/deletes
+        record_ptr = 0
+        op_list = ["update", "delete"]
+        batch_list = [100] # this is as big an SQL as spark can handle
+        for action in op_list:
+            results[action] = {}
+            for batch_sz in batch_list:
 
-    ##
-    # Merge test
-    
+                th.write("record count,{}\n".format(scfg.UPDATE_TEST_COUNT))
+                th.write("batch size,{}\n".format(batch_sz))
+
+                start = time.time()
+                print("{} {} records in batches of {}".format(action, scfg.UPDATE_TEST_COUNT, batch_sz))
+                tracking_list = []
+                for count,row in enumerate(range(0,scfg.UPDATE_TEST_COUNT, batch_sz)):
+                    if action == "update":
+                        query = "UPDATE {spark_catalog}.{spark_database}.{table} SET str_val_0='updated in batch size #{batchset}',float_val_0=3.14159265359,bool_val_0=true,int_val_0=42 WHERE ".format(
+                            spark_catalog=scfg.SPARK_CATALOG,
+                            spark_database=scfg.SPARK_DATABASE,
+                            table=scfg.TARGET_TABLE,
+                            batchset=batch_sz
+                        )
+                    else:
+                        query = "DELETE FROM {spark_catalog}.{spark_database}.{table} WHERE ".format(
+                            spark_catalog=scfg.SPARK_CATALOG,
+                            spark_database=scfg.SPARK_DATABASE,
+                            table=scfg.TARGET_TABLE
+                        )
+                    predicates = []
+                    for b in range(0, batch_sz):
+                        predicates.append("id = {}".format(ids[record_ptr]))
+                        record_ptr += 1
+                    query += " OR ".join(predicates)
+                    batch_start = time.time()
+                    try:
+                        res = spark.sql(query)
+                        elapsed = time.time()-batch_start
+                        results[action][str(batch_sz)] = elapsed
+                        tracking_list.append("{:.2f}".format(elapsed))
+                        sys.stdout.write("\rbatch {}: {:.2f} sec       ".format(count+1, elapsed))
+                        sys.stdout.flush()
+                    except Exception as e:
+                        print("problem with {}, this benchmark is invalid".format(action.upper()))
+                        if scfg.VERBOSE:
+                            print(e)
+
+                print("")
+                th.write("discrete update timings,{}\n".format(",".join(tracking_list)))
+                                                               
+                print("{:.2f} seconds to {} {} records in batches of {}".format(time.time()-start, action, scfg.UPDATE_TEST_COUNT, batch_sz))
+            
+            clean_up_time = time.time()
+            # After each set (update/delete), fix the hash-meal that gets left behind, include in timings
+            """CALL spark_catalog.system.expire_snapshots(table => 'trns_tbl_ice.ice_t1c1r', older_than => TIMESTAMP '2024-02-14 22:36:28.867')"""
+
+            print('expiring snapshots...')
+            try: 
+                spark.sql("CALL {spark_catalog}.system.expire_snapshots(table => '{spark_database}.{table}', older_than => TIMESTAMP '{timestamp}')".format(
+                    spark_catalog=scfg.SPARK_CATALOG,
+                    spark_database=scfg.SPARK_DATABASE,
+                    table=scfg.TARGET_TABLE,
+                    timestamp=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+                ))
+            except Exception as e:
+                print("bad CALL (system.expire_snapshots), probably not an iceberg table, skipping")
+                
+            
+            print('compacting files...')
+            try:
+                spark.sql("CALL {spark_catalog}.system.rewrite_data_files(table => '{spark_database}.{table}')".format(
+                    spark_catalog=scfg.SPARK_CATALOG,
+                    spark_database=scfg.SPARK_DATABASE,
+                    table=scfg.TARGET_TABLE
+                ))
+            except Exception as e:
+                print("bad CALL (system.rewrite_data_files), probably not an iceberg table, skipping")
+
+            print("clean-up after {action}: {time} sc".format(action=action, time="{:2f}".format(time.time()-clean_up_time)))
+
+        th.write("overall timings by batch size\n")
+        for r in results:
+            th.write("{},".format(r))
+            cols = []
+            for c in results[r]:
+                cols.append("{:2f}".format(results[r][c]))
+            th.write("{}\n".format(",".join(cols)))
+
+        ##
+        # Merge test
+        sys.stdout.write("running merge delete tests....\nget 5 and 25 rowcount percentiles...")
+        iceberg_df = spark.read.table("{}.{}.{}".format(scfg.SPARK_CATALOG, scfg.SPARK_DATABASE, scfg.TARGET_TABLE))
+
+        # Side-tables
+        p5_sample = iceberg_df.sample(0.05, seed=3)
+        p25_sample = iceberg_df.sample(0.25, seed=4)
+
+
+        th.write("\nmerge tests:\n")
+        th.write("5th percentile record count, {}\n".format(p5_sample.count()))
+        th.write("25th percentile record count, {}\n".format(p25_sample.count()))
+        th.write("load and merge timings:\n")
+        th.write("action/percentile,timing\n")
+        
+        plist = {"p5": p5_sample, "p25": p25_sample}
+        for per in plist:
+
+            sys.stdout.write("merge-delete benchmark, {} records...".format(plist[per]))
+            sys.stdout.flush()
+
+            target_table = "{}.{}.{}".format(scfg.SPARK_CATALOG, scfg.SPARK_DATABASE, scfg.TARGET_TABLE)
+            side_table = "{}.{}.{}_{}".format(scfg.SPARK_CATALOG, scfg.SPARK_DATABASE, scfg.TARGET_TABLE, per)
+            timer = time.time()
+            plist[per].write \
+                .format("iceberg") \
+                .mode("overwrite") \
+                .saveAsTable(side_table)
+            elapsed = time.time()-timer
+
+            print("\nload time ({}): {:.2f}".format(per, elapsed))
+            th.write("load {},{:.2f}\n".format(per, elapsed))
+
+            merge_q = "MERGE INTO {tgt_table} USING {src_table} ON {tgt_table}.id = {src_table}.id WHEN MATCHED THEN DELETE".format(
+                tgt_table=target_table,
+                src_table=side_table,
+            )
+
+            # timing #
+            merge_start = time.time()
+            spark.sql(merge_q)
+            merge_end = time.time()
+            # end timing #
+
+            print("merge time ({}): {:.2f}".format(per, merge_end-merge_start))
+            th.write("merge {},{:.2f}\n".format(per, merge_end-merge_start))
+
+            spark.sql("DROP TABLE {}".format(side_table))
+
+
+
+def run_tpcds_selective(scfg):
+
+    queries = []
+    sq = tpcds_selective_queries()
+    queries = sq.gen_all(scfg.get("tpcds_selective.scale_factor"))
+
+    scfg.active = scfg.get("tpcds_selective")
+    run_sql_queries(scfg, queries)
+
 
 def run_tpcds(scfg):
 
     queries = []
-    if scfg.BENCHMARK == "tpcds":
-        if scfg.TPCDS_QUERY_SCALE_FACTOR == "sf10000":
-            queries = tpcds_10t_queries.queries
-        elif scfg.TPCDS_QUERY_SCALE_FACTOR == "sf1000":
-            queries = tpcds_1t_queries.queries
-    elif scfg.BENCHMARK == "tpcds_s":
-        sq = tpcds_selective_queries()
-        queries = sq.gen_all(scfg.TPCDS_QUERY_SCALE_FACTOR)
 
+    if scfg.get("tpcds.scale_factor") == "sf10000":
+        queries = tpcds_10t_queries.queries
+    elif scfg.get("tpcds.scale_factor")  == "sf1000":
+        queries = tpcds_1t_queries.queries
+
+    scfg.active = scfg.get("tpcds")
+    run_sql_queries(scfg, queries)
+
+
+def run_sql_queries(scfg, queries):
 
     prom = PrometheusConnect(
-        url=scfg.PROMETHEUS_HOST,
-        disable_ssl=True,
+        url=scfg.get("prometheus.host"),
+        disable_ssl=scfg.get("prometheus.disable_ssl")
     )
 
-    outdir = "/tmp/{}_{}".format(scfg.APP_NAME, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    outdir = "/tmp/{}_{}".format(scfg.get("job.app_name"), datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
     os.mkdir(outdir)
 
     benchmark_start_time = datetime.datetime.now()
     spark = config_connect(scfg)
     header = "row, query, id, elapsed, nodes, cpu, mem, rows, bytes, splits, exec cluster util, cnode cluster util, all cpu util, exec ingress, disk_r, disk_w"
 
-    spark.sql("USE {catalog}.{database}".format(catalog=scfg.SPARK_CATALOG, database=scfg.SPARK_DATABASE))
-    rowcount = 0
+    spark.sql("USE {db_path}".format(db_path=scfg.active["database_path"]))
 
+    rowcount = 0
     run_queries = []
-    if scfg.RUN_QUERIES != None:
-        run_queries = scfg.RUN_QUERIES
+    if scfg.active["run_queries"] != "all":
+        run_queries = scfg.active["run_queries"]
     else:
         for q in queries:
             run_queries.append(q)
@@ -237,7 +496,7 @@ def run_tpcds(scfg):
         th.flush()
         for q in run_queries:
             rowcount += 1
-            if scfg.EXPLAIN:
+            if scfg.active["explain"]:
                 explain = spark.sql("EXPLAIN " + queries[q])
                 explain_result = [str(row) for row in explain.collect()]
                 with open("{outdir}/explain_{query}.txt".format(outdir=outdir, query=q), "w") as fh:
@@ -246,7 +505,7 @@ def run_tpcds(scfg):
 
             success = None
             try:
-                if scfg.CLEAR_CACHE:
+                if scfg.active["clear_cache"]:
                     spark.sql("CLEAR CACHE")
 
                 res = spark.sql(queries[q])
@@ -266,13 +525,13 @@ def run_tpcds(scfg):
 
             # Need a gap to separate stats collection between queries and allow
             # Prometheus time to report
-            time.sleep(scfg.SLEEP_BETWEEN_QUERIES)
+            time.sleep(scfg.active["sleep_time_sec"])
 
             # Gather associated metrics
             try:
                 exec_cpu_data = prom.get_metric_range_data(
                     metric_name='node_cpu_seconds_total',
-                    label_config={"job": scfg.EXEC_PROMETHEUS_JOB, "mode": "idle"},
+                    label_config={"job": scfg.get("exec_monitor.prometheus_job"), "mode": "idle"},
                     start_time=then,
                     end_time=now
                 )
@@ -283,7 +542,7 @@ def run_tpcds(scfg):
             try:
                 cnode_cpu_data = prom.get_metric_range_data(
                     metric_name='node_cpu_seconds_total',
-                    label_config={"job": scfg.CNODE_PROMETHEUS_JOB, "mode": "idle"},
+                    label_config={"job": scfg.get("cnode_monitor.prometheus_job"), "mode": "idle"},
                     start_time=then,
                     end_time=now
                 )
@@ -294,7 +553,7 @@ def run_tpcds(scfg):
             try:
                 exec_network_data_in = prom.get_metric_range_data(
                     metric_name='node_netstat_IpExt_InOctets',
-                    label_config={"job": scfg.EXEC_PROMETHEUS_JOB},
+                    label_config={"job": scfg.get("exec_monitor.prometheus_job")},
                     start_time=then,
                     end_time=now
                 )
@@ -305,7 +564,7 @@ def run_tpcds(scfg):
             try:
                 exec_network_data_out = prom.get_metric_range_data(
                     metric_name='node_netstat_IpExt_OutOctets',
-                    label_config={"job": scfg.EXEC_PROMETHEUS_JOB},
+                    label_config={"job": scfg.get("exec_monitor.prometheus_job")},
                     start_time=then,
                     end_time=now
                 )
@@ -316,7 +575,7 @@ def run_tpcds(scfg):
             try:
                 exec_disk_reads = prom.get_metric_range_data(
                     metric_name='node_disk_read_bytes_total',
-                    label_config={"job": scfg.EXEC_PROMETHEUS_JOB},
+                    label_config={"job": scfg.get("exec_monitor.prometheus_job")},
                     start_time=then,
                     end_time=now
                 )
@@ -327,7 +586,7 @@ def run_tpcds(scfg):
             try:
                 exec_disk_writes = prom.get_metric_range_data(
                     metric_name='node_disk_written_bytes_total',
-                    label_config={"job": scfg.EXEC_PROMETHEUS_JOB},
+                    label_config={"job": scfg.get("exec_monitor.prometheus_job")},
                     start_time=then,
                     end_time=now
                 )
@@ -392,4 +651,4 @@ def run_tpcds(scfg):
     dump_stats(prom, benchmark_start_time, benchmark_end_time, outdir)
     
     spark.stop()
-    print("done")
+    print("\ndone")

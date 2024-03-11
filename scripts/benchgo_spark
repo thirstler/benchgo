@@ -1,126 +1,33 @@
-#!/bin/env pyspark
+#!/bin/bash
 
-from benchgo.benchgo_spark import *
+[ -d ~/.benchgo ] || mkdir ~/.benchgo
 
-###############################################################################
-# MINIMUMS
-class spcfg:
+if [ ! -f ~/.benchgo/sparkenv ]; then
+    echo "please create a "~/.benchgo/sparkenv" file with the following (changeing\nvalues to the things you actually want):"
+    echo ""
+    echo "SPARK_HOME={/path/to/spark}"
+    echo "ICEBERG_PACKAGE=org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3"
+    echo "VAST_CONNECTOR={/path/to/vast-spark/jars}"
+    echo ""
+    echo "export SPARK_HOME VAST_CONNECTOR ICEBERG_PACKAGE"
+    exit 1
+else
+    source ~/.benchgo/sparkenv
+fi
 
-    # This will cause the script to dump the command for an interactive shell with
-    # the configured directives rather than run the benchmark
-    DUMP_INTERACTIVE=False
-    VERBOSE=False
+if [ "$1" = "genconfig" ]; then
+    benchgo --gen-spark-config
+    exit 1
+fi
 
-    # SPARK MINIMUMS (YOU MUST SET THESE)
-    APP_NAME="spark_iceberg_update_delete"
-    SPARK_MASTER="spark://node1:7077"
-    SPARK_NUM_EXEC="3"        # Total executors for job
-    SPARK_EXEC_CORES="40"
-    SPARK_EXEC_MEMORY="200g"
-    SPARK_DRIVER_MEMORY="8g"
-    SPARK_CATALOG="spark_catalog"
-    SPARK_DATABASE="trns_tbl_ice"
-    TPCDS_QUERY_SCALE_FACTOR="sf1000"
-    EXPLAIN=True
-    TARGET_TABLE="ice_t1c1r" # Needed for non-TPC-DS related tests
+if [ ! -f ~/.benchgo/benchgo_spark.yaml ]; then
+    echo "no config file present - create a config file (~/.benchgo/benchgo_spark.yaml)\nor run \"$0 genconfig\" to create a template in ~/.benchgo"
+    exit 1
+fi
 
-    ##
-    # BENCHMARK MINUMUMS (YOU WANT TO BENCHMARK SOMETHING, RIGHT?)
-    BENCHMARK="update/delete"
-    # Leave to None to run all listed queries
-    # Otherwise, it's a list of query names to run, eg: ["query1", "query2"...]
-    RUN_QUERIES=None
+OPTS=""
+[ -z "$SPARK_HOME" ] && echo '$SPARK_HOME not set' && exit 1
+[ -z "${ICEBERG_PACKAGE}" ] || OPTS+=" --packages ${ICEBERG_PACKAGE}"
+[ -z "${VAST_CONNECTOR}" ] || OPTS+=" --driver-class-path $(echo ${VAST_CONNECTOR}/*.jar | tr ' ' ':')  --jars $(echo ${VAST_CONNECTOR}/*.jar | tr ' ' ',')"
 
-    ##
-    # VDB MINIMUMS (YOU MUST SET THESE WHEN BENCHMARKING VDB)
-    LOAD_VDB=False # False if you don't want to load VDB capability
-    VDB_ENDPOINT="http://local.tmphx.vast.lab:8070"
-    VDB_LB_ENDPOINTS="http://local.tmphx.vast.lab:8070"
-    VDB_ACCESS_KEY="KTYJE7EBRPXFA8LW40RT"
-    VDB_SECRET_KEY="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh"
-    VDB_SPLITS="64"
-    VDB_SUBSPLITS="10"
-    VDB_JARS="/usr/local/vast-spark3"
-
-    ##
-    # ICEBERG/S3a MINIMUMS (YOU MUST SET THESE WHEN BENCHMARKING ICEBERG)
-    LOAD_ICEBERG=True
-    ICEBERG_PACKAGE="org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3"
-    ICEBERG_JARS=""
-
-    ##
-    # Hive/S3A MINIMUMS
-    HIVE_METASTORE="thrift://10.73.1.41:9083"
-    S3A_ACCESS_KEY="KTYJE7EBRPXFA8LW40RT"
-    S3A_SECRET_KEY="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh"
-    S3A_ENDPOINT="http://local.tmphx.vast.lab:8070"
-
-    ##
-    # BENCHGO CONFIGURATION
-    EXEC_MONITORING=True
-    EXEC_PROMETHEUS_JOB="trino_1"
-    CNODE_PROMETHEUS_JOB="vast_cnodes"
-    PROMETHEUS_HOST="http://10.73.1.41:9090"
-    EXEC_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9082:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-    DRIVER_MONITORING=False # Needed if driver is on separate host from a worker
-    DRIVER_MONITORING_OPTIONS="-javaagent:/usr/local/jmx_exporter/jmx_prometheus_javaagent-0.19.0.jar=9084:/usr/local/jmx_exporter/config.yaml -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8092 -Dcom.sun.management.jmxremote.rmi.port=8093 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
-
-    ###############################################################################
-    # Additional VDB config/tuning
-    CLEAR_CACHE=True
-    SPARK_VDB_CONFIG = (
-        ("spark.ndb.endpoint", VDB_ENDPOINT),
-        ("spark.ndb.data_endpoints", VDB_LB_ENDPOINTS),
-        ("spark.ndb.access_key_id", VDB_ACCESS_KEY),
-        ("spark.ndb.secret_access_key", VDB_SECRET_KEY),
-        ("spark.ndb.num_of_splits", VDB_SPLITS),
-        ("spark.ndb.num_of_sub_splits", VDB_SUBSPLITS),
-        ("spark.ndb.rowgroups_per_subsplit", "1"),
-        ("spark.ndb.query_data_rows_per_split", "4000000"),
-        ("spark.ndb.retry_max_count", "3"),
-        ("spark.ndb.retry_sleep_duration", "1"),
-        ("spark.ndb.parallel_import", "true"),
-        ("spark.ndb.dynamic_filter_compaction_threshold", "100"),
-        ("spark.ndb.dynamic_filtering_wait_timeout", "2"),
-        ("spark.sql.catalog.ndb", "spark.sql.catalog.ndb.VastCatalog"),
-        ("spark.sql.extensions", "ndb.NDBSparkSessionExtension")
-    )
-    # Iceberg config
-    SPARK_ICEBERG_CONFIG = (
-        ("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"),
-        ("spark.sql.catalog.spark_catalog", "org.apache.iceberg.spark.SparkSessionCatalog"),
-        ("spark.sql.catalog.spark_catalog.type","hive"),
-        ("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog"),
-        ("spark.sql.catalog.local.type", "hive"),
-        ("spark.hadoop.hive.metastore.uris", HIVE_METASTORE),
-        ("spark.hadoop.mapreduce.outputcommitter.factory.scheme.s3a", "org.apache.hadoop.fs.s3a.commit.S3ACommitterFactory")
-    )
-    SPARK_S3A_CONFIG = (
-        ("spark.hadoop.fs.s3a.access.key", S3A_ACCESS_KEY), 
-        ("spark.hadoop.fs.s3a.secret.key", S3A_SECRET_KEY),
-        ("spark.hadoop.fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem"),
-        #("spark.hadoop.fs.s3a.experimental.input.fadvise", "random"),
-        #("spark.hadoop.fs.s3a.block.size", "4M"),
-        #("spark.hadoop.fs.s3a.readahead.range", "4M")
-    )
-
-    # For generic, non-AWS S3 targets
-    SPARK_GENERIC_S3A_CONFIG = (
-        ("spark.hadoop.fs.s3a.endpoint", S3A_ENDPOINT),
-        ("spark.hadoop.fs.s3a.path.style.access", "true"),
-        ("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
-    )
-    SLEEP_BETWEEN_QUERIES=5
-    UPDATE_TEST_COUNT=10000
-
-
-if __name__ == "__main__":
-
-    if spcfg.DUMP_INTERACTIVE:
-        dump_interactive(spcfg())
-        exit(0)
-
-    if spcfg.BENCHMARK[:5] == 'tpcds':
-        run_tpcds(spcfg())
-    elif spcfg.BENCHMARK == 'update/delete':
-        run_update_delete(spcfg())
+pyspark ${OPTS} < $(which benchgo_spark.py) 
