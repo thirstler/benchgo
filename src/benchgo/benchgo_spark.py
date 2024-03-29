@@ -30,6 +30,7 @@ class spcfg:
                 return None
             except TypeError:
                 return None
+            
         return val
 
     
@@ -145,7 +146,7 @@ def config_connect(scfg):
     return spark
 
 
-def _run_inserts(scfg):
+def run_sql_inserts(scfg):
 
     outdir = "/tmp/{}_{}".format(scfg.get("job.app_name"), datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
     os.mkdir(outdir)
@@ -274,7 +275,6 @@ def run_inserts(scfg):
         print("{:.2f} rows/s\n".format(r/(sum(timings)/len(timings))))
 
 
-
 def run_update_delete(scfg):
 
     outdir = "/tmp/{}_{}".format(scfg.APP_NAME, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
@@ -294,6 +294,7 @@ def run_update_delete(scfg):
                 table=scfg.TARGET_TABLE
             )
         )
+        
         src_tbl_rows = res.collect()
         id_range_len = int(src_tbl_rows[0][1])-int(src_tbl_rows[0][0])
         print("done ({})".format(id_range_len))

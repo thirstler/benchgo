@@ -3,6 +3,7 @@ import string
 import boto3
 import sys
 import uuid
+import pyarrow
 
 class sf_cols:
     
@@ -16,7 +17,7 @@ class sf_cols:
         self.FLOAT_COLS = wf*5
         self.INT_COLS = wf*3
         self.BOOL_COLS= wf*2
-    
+
 
 def write_data(args, data):
     obj_id = uuid.uuid4()
@@ -76,6 +77,29 @@ def mk_ddl_sql(width_factor, table_path, if_not_exists=False, table_format=None)
     return ddl
 
 
+    
+def pyarrow_schema(width_factor):
+
+    columns = [("id", pyarrow.int64()), ("record_id", pyarrow.string())]
+
+    # String data types:
+    str_cols = (width_factor*1) if (width_factor*1 <= 20) else 20
+    for n in range(0, str_cols):
+        columns.append( ("str_val_{}".format(n), pyarrow.string()) )
+    # Float data types:
+    for n in range(0, width_factor*5):
+        columns.append( ("float_val_{}".format(n), pyarrow.float32()) )
+    # Boolean data types:
+    for n in range(0, width_factor*2):
+        columns.append( ("bool_val_{}".format(n), pyarrow.bool_()) )
+    # Integer data types:
+    for n in range(0, width_factor*3):
+        columns.append( ("int_val_{}".format(n), pyarrow.int32()) )
+
+    return pyarrow.schema(columns)
+    
+
+
 def mk_schema(width_factor):
 
     columns = [("id", "BIGINT"), ("record_id", "VARCHAR(255)")]
@@ -96,6 +120,16 @@ def mk_schema(width_factor):
 
     return columns
     
+
+def mk_dict_row(id, width_factor, sparsity):
+    dict_row = {}
+    row = mk_row(id, width_factor, sparsity)
+    schema = mk_schema(width_factor)
+    for i, item in enumerate(schema):
+        if row[i] != None:
+            dict_row[item[0]] = row[i]
+    return dict_row
+
 
 def mk_row(id, width_factor, sparsity):
 

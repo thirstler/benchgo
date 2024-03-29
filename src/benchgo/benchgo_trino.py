@@ -18,7 +18,7 @@ import random
 import string
 import sys
 import trino
-from datetime import datetime
+import datetime
 
 # Configuration
 TRINO_SESSION={
@@ -371,7 +371,7 @@ def tpcds(args, th):
 
     tc = connection(args)
     outdir = "/tmp/{}_{}".format(args.name, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
-    os.mkdir(outdir)
+    #os.mkdir(outdir)
     row_count = 0
 
     header = "row, query, id, time, nodes, cpu, mem, rows, bytes, splits, exec cluster util, cnode cluster util, all cpu util, exec ingress, disk_r, disk_w"
@@ -389,7 +389,7 @@ def tpcds(args, th):
             th.flush()
             continue
         
-        time.sleep(args.sleep_between_queries)
+        time.sleep(int(args.sleep_between_queries))
         
         # Gather associated metrics
         try:

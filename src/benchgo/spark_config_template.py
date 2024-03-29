@@ -75,7 +75,6 @@ CONFIG_TEMPLATE="""config:
     iterations: 10
     batch_size:
       - 100
-      - 100
       - 1000
       - 10000
   merge:
@@ -112,6 +111,7 @@ CONFIG_TEMPLATE="""config:
     spark.sql.extensions: "ndb.NDBSparkSessionExtension"
 
   iceberg_config:
+    spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3"
     spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
     spark.sql.catalog.spark_catalog: "org.apache.iceberg.spark.SparkSessionCatalog"
     spark.sql.catalog.spark_catalog.type: "hive"

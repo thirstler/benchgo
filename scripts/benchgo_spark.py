@@ -4,7 +4,7 @@ from benchgo.benchgo_spark import *
 
 if __name__ == "__main__":
 
-    os.environ['PYSPARK_PYTHON'] = '/home/vastdata/venv/bin/python'
+    #os.environ['PYSPARK_PYTHON'] = '/home/vastdata/venv/bin/python'
     
     config = spcfg()
     if config.get("job.dump_interactive"):

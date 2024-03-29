@@ -6,7 +6,6 @@ if [ ! -f ~/.benchgo/sparkenv ]; then
     echo "please create a "~/.benchgo/sparkenv" file with the following (changeing\nvalues to the things you actually want):"
     echo ""
     echo "SPARK_HOME={/path/to/spark}"
-    echo "ICEBERG_PACKAGE=org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3"
     echo "VAST_CONNECTOR={/path/to/vast-spark/jars}"
     echo ""
     echo "export SPARK_HOME VAST_CONNECTOR ICEBERG_PACKAGE"
@@ -27,7 +26,6 @@ fi
 
 OPTS=""
 [ -z "$SPARK_HOME" ] && echo '$SPARK_HOME not set' && exit 1
-[ -z "${ICEBERG_PACKAGE}" ] || OPTS+=" --packages ${ICEBERG_PACKAGE}"
 [ -z "${VAST_CONNECTOR}" ] || OPTS+=" --driver-class-path $(echo ${VAST_CONNECTOR}/*.jar | tr ' ' ':')  --jars $(echo ${VAST_CONNECTOR}/*.jar | tr ' ' ',')"
 
 pyspark ${OPTS} < $(which benchgo_spark.py) 
