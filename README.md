@@ -1,6 +1,19 @@
 Running Benchmarks
 ==================
 
+Install
+-------
+I'd create a virtual environment for this
+
+    python -mvenv ./venv
+    source ./venv/bin/activate
+
+Enter benchgo directory and
+ 
+    python -mbuild
+    pip install ./dist/benchgo-VERSION.tar.gz
+    
+
 Monitoring
 ----------
 Output of some benchmark tests (TPC-DS) include performance data polled from worker nodes to determine CPU utilization, network traffic and disk I/O during benchmarks. Prometheus is used for this, so you'll need to install Prometheus (and optionally Grafana) somewhere in the benchmark environment. Rough outline:
