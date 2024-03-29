@@ -3,18 +3,43 @@ Running Benchmarks
 
 Monitoring
 ----------
-Output of benchmark scripts includes performance data polled from worker nodes to determine CPU utilization, network traffic and disk I/O during benchmarks. Prometheus is used for this, so you'll need to install Prometheus (and optionally Grafana) somewhere in the benchmark environment. Rough outline:
+Output of some benchmark tests (TPC-DS) include performance data polled from worker nodes to determine CPU utilization, network traffic and disk I/O during benchmarks. Prometheus is used for this, so you'll need to install Prometheus (and optionally Grafana) somewhere in the benchmark environment. Rough outline:
 
-1. Install Prometheus on a system separate from any benchmarkeds systems
+1. Install Prometheus on a system separate from any benchmarking systems
 2. Install node_exporter and all worker systems and configure Prometheus to poll them under the same job (like "exec_cluster") using a 5 second polling interval.
 3. If benchmarking VAST, install and run a node_exporter on each CNode and group them under another job ("cnode_cluster").
 
 You'll specify the prometheus service when executing benchmark runs.
 
+Data
+----
+In the case of TPC-DS and TPC-DS-Selective tests data is not pre-generated.
+You'll have to do that on your own ahead of time. I might imbed some ability 
+to generate and place TPC-DS and TPC-H data with this utility later.
+
+Tests/Benchmarks
+----------------
+Bit of a hodge-podge but you can run
+
+Spark & Trino
+- TPC-DS
+- TPC-DS-Selective (custom)
+
+Trino Only:
+- Merge (delete & update)
+- Update
+- Insert tests
+
+Spark Only:
+- Dataframe ingest
+
+SDK:
+- Ingest
+
 Trino
 -----
 
-Trino is run using the "benchgo" script. 
+Trino and SDK operations are run using the "benchgo" script. 
 
     benchgo --name vdb-trino-1t \
     --benchmark tpcds \
@@ -28,62 +53,50 @@ Trino is run using the "benchgo" script.
 Spark
 -----
 
-Spark benchmarks are run by configuring the "benchgo_spark" script and then submitting the job to spark-submit or pyspark:
+Spark benchmarks are run by editing an environment file (~/.benchgo/sparkenv)
+and a YAML configuration file (~/.benchgo/benchgo_spark.yaml) to indicate the
+tests you want to run. The tests are pre-canned so it is not a workload file
+but rather where the spark job gets configuration - as well as set some
+configuration items for the load you want to run.
 
-    # Needed if you're using a stand-alone pyspark
-    export SPARK_HOME=/usr/local/spark3
+    # Set up a sparkenv file - set's up the spark driver environment, not the
+    # executors. Set to legit values, of course
+    cat << EOF > ~/.benchgo/sparkenv
+    SPARK_HOME=/usr/local/spark3
+    VAST_CONNECTOR=/usr/local/vast-spark
 
-    pyspark --driver-class-path $(echo /usr/local/vast-spark3/*.jar | tr ' ' ':') \
-    --jars $(echo /usr/local/vast-spark3/*.jar | tr ' ' ',') < $(which benchgo_spark)
+    # becnchgo_spark.py needs these
+    export SPARK_HOME VAST_CONNECTOR
+    EOF
 
+    # Create a template YAML file with 
+    benchgo --gen-spark-config
 
-Iceberg
+    # Edit the config file to taste:
+    vi ~/.benchgo/benchgo_spark.yaml
 
-    export SPARK_HOME=/usr/local/spark3
-    pyspark --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 < $(which benchgo_spark)
+    # Run the job
+    benchgo_spark
 
     
-'''
- spark-sql --packages org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.4.3 \
-   --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-   --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
-   --conf spark.sql.catalog.spark_catalog.type=hive \
-   --conf spark.sql.catalog.local=org.apache.iceberg.spark.SparkCatalog \
-   --conf spark.sql.catalog.local.type=hive \
-   --conf spark.hadoop.hive.metastore.uris=thrift://10.73.1.41:9083 \
-   --conf spark.hadoop.fs.s3a.impl="org.apache.hadoop.fs.s3a.S3AFileSystem" \
-   --conf spark.hadoop.fs.s3a.access.key="KTYJE7EBRPXFA8LW40RT" \
-   --conf spark.hadoop.fs.s3a.secret.key="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh" \
-   --conf spark.hadoop.fs.s3a.path.style.access="true" \
-   --conf spark.hadoop.fs.s3a.connection.ssl.enabled="false" \
-   --conf spark.hadoop.fs.s3a.endpoint=http://local.tmphx.vast.lab:8070
-'''
 
 Generating Data for Transaction Tests
 -------------------------------------
 
-This is an example set of commands to generate the indicated data sets using a set of
-3 servers each with 40 cores and 256GB of memory.
+This is an example set of commands to generate the indicated data sets on a single server. You can adjust these commands to generate data on multiple servers.
 
-    
+    # For upload to an S3 bucket, set up some variables, otherwise you
+    # can specify a directory for output.
     export S3_ENDPOINT=http://localhost:8070
     export S3_BUCKET=object-data
     export KEY_PREFIX="trns_tbl"
     export AWS_ACCESS_KEY_ID="KTYJE7EBRPXFA8LW40RT"
     export AWS_SECRET_ACCESS_KEY="CrCK8xPdTNtUo+vXzXDukRFeDQYL7Q9XThEb3iQh"
 
-    ##
-    # Creates the following data sets
-    # - 10 cols, 1m, 10m, 100m, 1b, 10b rows
-    # - 100 cols, 1m, 10m, 100m, 1b, 10b rows
-    # - 1000 cols, 1m, 10m, 100m, 1b, 10b rows
-    # - 10000 cols, 1m, 10m, 100m, 1b, 10b rows
-
-    ###########################################################################
 
     ##
-    # 10 cols, 10m rows
-    for n in {1..10}; do
+    # Small table with 13 cols and 1 million rows
+    for n in {1..40}; do
         mkdata --endpoint ${S3_ENDPOINT} \
         --data \
         --jobs 40 \
@@ -94,235 +107,9 @@ This is an example set of commands to generate the indicated data sets using a s
         --records-per-job 25000
     done
 
-    ##
-    # 10 cols, 10m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1c10r \
-            --records-per-job 250000 &
-    done
 
     ##
-    # 10 cols, 100m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1c100r \
-            --records-per-job 2500000 &
-    done
-
-    ##
-    # 10 cols 1000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1c1000r \
-            --records-per-job 25000000 &
-    done
-
-    ##
-    # 10, cols 10000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1c10000r \
-            --records-per-job 250000000 &
-    done
- 
-    ###########################################################################
-
-    ##
-    # 100, cols 1m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-        --data \
-        --jobs 40 \
-        --job ${n} \
-        --width-factor 10 \
-        --s3out ${S3_BUCKET} \
-        --s3prefix ${KEY_PREFIX}/10c1r \
-        --records-per-job 25000
-    done
-
-    ##
-    # 100, cols 10m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 10 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/10c10r \
-            --records-per-job 250000 &
-    done
-
-    ##
-    # 100, cols 100m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 10 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/10c100r \
-            --records-per-job 2500000 &
-    done
-
-    ##
-    # 100, cols 1000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 10 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/10c1000r \
-            --records-per-job 25000000 &
-    done
-
-    ##
-    # 100, cols 10000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 10 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/10c10000r \
-            --records-per-job 250000000 &
-    done
-  
-    ###########################################################################
-
-    ##
-    # 1000, cols 1m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-        --data \
-        --jobs 40 \
-        --job ${n} \
-        --width-factor 100 \
-        --s3out ${S3_BUCKET} \
-        --s3prefix ${KEY_PREFIX}/100c1r \
-        --records-per-job 25000 &
-
-    ##
-    # 1000, cols 10m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 100 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/100c10r \
-            --records-per-job 250000 &
-    done
-
-    ##
-    # 1000, cols 100m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 100 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/100c100r \
-            --records-per-job 2500000 &
-    done
-
-    ##
-    # 1000, cols 1000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 100 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/100c1000r \
-            --records-per-job 25000000 &
-    done
-
-    ##
-    # 1000, cols 10000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 100 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/100c10000r \
-            --records-per-job 250000000 &
-    done
-    
-
-    ###########################################################################
-
-    ##
-    # 10,000, cols 1m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-        --data \
-        --jobs 40 \
-        --job ${n} \
-        --width-factor 1000 \
-        --s3out ${S3_BUCKET} \
-        --s3prefix ${KEY_PREFIX}/1000c1r \
-        --records-per-job 25000 &
-    done
-
-    ##
-    # 1000, cols 10m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1000 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1000c10r \
-            --records-per-job 250000 &
-    done
-
-    ##
-    # 1000, cols 100m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1000 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1000c100r \
-            --records-per-job 2500000 &
-    done
-
-    ##
-    # 1000, cols 1000m rows
+    # Fat table with 10,022 cols and 1 billion rows
     for n in {1..40}; do
         mkdata --endpoint ${S3_ENDPOINT} \
             --data \
@@ -334,16 +121,4 @@ This is an example set of commands to generate the indicated data sets using a s
             --records-per-job 25000000 &
     done
 
-    ##
-    # 1000, cols 10000m rows
-    for n in {1..40}; do
-        mkdata --endpoint ${S3_ENDPOINT} \
-            --data \
-            --jobs 40 \
-            --job ${n} \
-            --width-factor 1000 \
-            --s3out ${S3_BUCKET} \
-            --s3prefix ${KEY_PREFIX}/1000c10000r \
-            --records-per-job 250000000 &
-    done
-
+And of course you can do anything in between to arrive at a table of synthetic data of desired column width and row count.
