@@ -3,9 +3,9 @@ from prometheus_api_client import PrometheusConnect
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
 from pyspark.sql.functions import col, countDistinct
-from benchgo.tpcds_sf10000_queries import *
-from benchgo.tpcds_sf1000_queries import *
-from benchgo.tpcds_selective_queries import *
+from benchgo.queries.trino.tpcds_sf10000_queries import *
+from benchgo.queries.trino.tpcds_sf1000_queries import *
+from benchgo.queries.trino.tpcds_selective_queries import *
 from benchgo.transaction_tables import *
 from benchgo.prometheus_handlers import *
 from pathlib import Path

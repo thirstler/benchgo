@@ -1,6 +1,7 @@
 from pathlib import Path
 
-CONFIG_OUT_LOCATION="{}/.benchgo/benchgo_spark.yaml".format(Path.home())
+BENCHGO_CONF_HOME="{}/.benchgo".format(Path.home())
+CONFIG_OUT_LOCATION="{}/benchgo_spark.yaml".format(BENCHGO_CONF_HOME)
 CONFIG_TEMPLATE="""config:
 
   job:

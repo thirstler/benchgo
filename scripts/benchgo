@@ -69,12 +69,18 @@ if __name__ == "__main__":
 
     if args.gen_spark_config:
         from benchgo.spark_config_template import *
+
         try:
+            os.mkdir(BENCHGO_CONF_HOME)
             with open(CONFIG_OUT_LOCATION, "x") as fh:
                 fh.write(CONFIG_TEMPLATE)
+            print("template written to {}, you need to configure it".format(CONFIG_OUT_LOCATION))
         except FileExistsError:
             print("'{}' already exists, move or remove and try again".format(CONFIG_OUT_LOCATION))
+        
     elif args.engine == "trino":
         run_trino(args)
     elif args.engine == "vdb-sdk":
         run_sdk(args)
+    else:
+        print("did you specify an engine?")

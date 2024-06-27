@@ -3,10 +3,10 @@ from trino.dbapi import connect
 from trino.auth import BasicAuthentication
 from trino.transaction import IsolationLevel
 from urllib.parse import urlparse
-from benchgo.tpcds_sf10000_queries import *
-from benchgo.tpcds_sf1000_queries import *
+from benchgo.queries.trino.tpcds_sf10000_queries import *
+from benchgo.queries.trino.tpcds_sf1000_queries import *
 from benchgo.prometheus_handlers import *
-from benchgo.tpcds_selective_queries import *
+from benchgo.queries.trino.tpcds_selective_queries import *
 from benchgo.transaction_tables import sf_cols
 from multiprocessing import Process
 import os
