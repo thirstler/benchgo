@@ -1,7 +1,7 @@
-from prometheus_api_client import PrometheusConnect
+import os, datetime, json, time, requests, random, string, sys, datetime, argparse
 from trino.dbapi import connect
-from trino.auth import BasicAuthentication
 from trino.transaction import IsolationLevel
+from trino.auth import BasicAuthentication
 from urllib.parse import urlparse
 from benchgo.queries.trino.tpcds_sf10000_queries import *
 from benchgo.queries.trino.tpcds_sf1000_queries import *
@@ -9,16 +9,7 @@ from benchgo.prometheus_handlers import *
 from benchgo.queries.trino.tpcds_selective_queries import *
 from benchgo.transaction_tables import sf_cols
 from multiprocessing import Process
-import os
-import datetime
-import json
-import time
-import requests
-import random
-import string
-import sys
-import trino
-import datetime
+
 
 # Configuration
 TRINO_SESSION={
@@ -67,19 +58,35 @@ def connection(args):
     cur = conn.cursor()
     return cur
 
-def run_trino(args):
+def run_trino():
 
-    # Output file
-    outdir = "/tmp/{}_{}".format(args.name, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
-    os.mkdir(outdir)
-    with open("{outdir}/timings.csv".format(outdir=outdir), "w") as fh:
-        if args.benchmark == "tpcds" or args.benchmark == "tpcds_s":
-            tpcds(args, fh)
-        elif args.benchmark == "update/delete":
-            update_delete(args, fh)
-        fh.close()
+    parser = argparse.ArgumentParser(
+        description="Trino workload generator"
+    )
+    parser.add_argument("trino", action="store_true")
+    parser.add_argument("tpcds", action="store_true")
+    parser.add_argument("tpch", action="store_true")
+    parser.add_argument("transaction", action="store_true")
+    parser.add_argument("throughput", action="store_true")
 
-    print("outint in {}/timings.csv".format(outdir))
+    parser.add_argument("--name", default="benchgo", help="name this run something - will show up in output directory")
+    parser.add_argument("--benchmark", default=None, help="benchmark task to run (tpcds, insert, update/delete)")
+    parser.add_argument("--trino-coordinator", help="Trino coordinator URI (e.g.: http://trino_coord:8080)")
+    parser.add_argument("--trino-password", default=None, help="Trino password")
+    parser.add_argument("--trino-user", default='admin', help="Trino username")
+    parser.add_argument("--trino-catalog", help="catalog housing target tpcds database")
+    parser.add_argument("--trino-schema", help="schema housing target tpcds database")
+
+    # Prometheus options
+    parser.add_argument("--prometheus-host", help="URL for prometheus host (e.g.: http://myhost:9090)")
+    parser.add_argument("--trino-prometheus-job", default="trino_1", help="Prometheus job name for Trino cluster's node_exporter data")
+    parser.add_argument("--cnode-prometheus-job", default="vast_cnodes", help="Prometheus job name for CNode cluster's node_exporter data")
+
+
+
+
+
+    
 
 
 def _update_slice(args, slice, offset, count, randkey, concurrancy):
@@ -351,180 +358,6 @@ def update_delete(args, th):
         print("no source table for UPDATE merge test specified, skipping")
 
 
-def tpcds(args, th):
-    queries = []
-    if args.benchmark == "tpcds":
-        if args.tpcds_scale == "sf10000":
-            queries = tpcds_10t_queries.queries
-        elif args.tpcds_scale == "sf1000":
-            queries = tpcds_1t_queries.queries
-    elif args.benchmark == "tpcds_s":
-        sq = tpcds_selective_queries()
-        queries = sq.gen_all(args.tpcds_scale)
-    
-    prom = PrometheusConnect(
-            url=args.prometheus_host,
-            disable_ssl=True,
-        )
-    
-    benchmark_start_time = datetime.datetime.now()
-
-    tc = connection(args)
-    outdir = "/tmp/{}_{}".format(args.name, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
-    #os.mkdir(outdir)
-    row_count = 0
-
-    header = "row, query, id, time, nodes, cpu, mem, rows, bytes, splits, exec cluster util, cnode cluster util, all cpu util, exec ingress, disk_r, disk_w"
-    th.write(header+"\n")
-    print(header)
-    for query in queries:
-        row_count += 1
-        try:
-            then = datetime.datetime.now(tz=datetime.timezone.utc)
-            ed = tc.execute("EXPLAIN ANALYZE {query}".format(query=queries[query]))
-            rows = tc.fetchall()
-            now = datetime.datetime.now(tz=datetime.timezone.utc)
-        except Exception as e:
-            th.write("{row},{query},{e},,,,,,,,,\n".format(row=row_count, query=query,e=e))
-            th.flush()
-            continue
-        
-        time.sleep(int(args.sleep_between_queries))
-        
-        # Gather associated metrics
-        try:
-            trino_cpu_data = prom.get_metric_range_data(
-                metric_name='node_cpu_seconds_total',
-                label_config={"job": args.trino_prometheus_job, "mode": "idle"},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            trino_cpu_data = None
-            sys.stderr.write(str(e))
-
-        try:
-            cnode_cpu_data = prom.get_metric_range_data(
-                metric_name='node_cpu_seconds_total',
-                label_config={"job": args.cnode_prometheus_job, "mode": "idle"},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            cnode_cpu_data = None
-            sys.stderr.write(str(e))
-
-        try:
-            trino_network_data_in = prom.get_metric_range_data(
-                metric_name='node_netstat_IpExt_InOctets',
-                label_config={"job": args.trino_prometheus_job},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            trino_network_data_in = None
-            sys.stderr.write(str(e))
-
-        try:
-            trino_network_data_out = prom.get_metric_range_data(
-                metric_name='node_netstat_IpExt_OutOctets',
-                label_config={"job": args.trino_prometheus_job},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            trino_network_data_out = None
-            sys.stderr.write(str(e))
-
-        try:
-            trino_disk_reads = prom.get_metric_range_data(
-                metric_name='node_disk_read_bytes_total',
-                label_config={"job": args.trino_prometheus_job},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            trino_disk_reads = None
-            sys.stderr.write(str(e))
-
-        try:
-            trino_disk_writes = prom.get_metric_range_data(
-                metric_name='node_disk_written_bytes_total',
-                label_config={"job": args.trino_prometheus_job},
-                start_time=then,
-                end_time=now
-            )
-        except Exception as e:
-            trino_disk_writes = None
-            sys.stderr.write(str(e))
-
-
-        trino_cpus = prom_node_cpu_count(trino_cpu_data)
-        cnode_cpus = prom_node_cpu_count(cnode_cpu_data)
-        tnet_in = prom_node_net_rate(trino_network_data_in)
-        tnet_out = prom_node_net_rate(trino_network_data_out)
-        trino_disk_r = prom_node_disk_rate(trino_disk_reads)
-        trino_disk_w = prom_node_disk_rate(trino_disk_writes)
-        tnet_quiet_in = tnet_in - tnet_out
-
-        ttl_cpus = trino_cpus+cnode_cpus
-        trino_cluster_rate = 1 - prom_node_cpu_util_rate(trino_cpu_data, "idle")
-        cnode_cluster_rate = 1 - prom_node_cpu_util_rate(cnode_cpu_data, "idle")
-
-        timing = "{rowcount:03d},{query},{query_id},{time},{nodes},{cpu},{mem},{rows},{bytes},{splits},{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
-            rowcount=row_count,
-            nodes=ed.stats["nodes"],
-            splits=ed.stats["totalSplits"],
-            time=((ed.stats["elapsedTimeMillis"]-ed.stats["queuedTimeMillis"]))/1000,
-            cpu=ed.stats["cpuTimeMillis"],
-            rows=ed.stats["processedRows"],
-            bytes=ed.stats["processedBytes"],
-            mem=ed.stats["peakMemoryBytes"],
-            state=ed.stats["state"],
-            query_id=ed.query_id,
-            query=query,
-            t_cluster_util="{:.2f}".format(trino_cluster_rate) if trino_cluster_rate <= 1 else "",
-            v_cluster_util="{:.2f}".format(cnode_cluster_rate) if cnode_cluster_rate <= 1 else "",
-            agg_cpu_util="{:.2f}".format(((trino_cluster_rate*trino_cpus) + (cnode_cluster_rate*cnode_cpus))/(ttl_cpus if ttl_cpus > 0 else 1)) if (trino_cluster_rate <=1 and cnode_cluster_rate <= 1) else "",
-            tnet_quiet_in=tnet_quiet_in,
-            disk_r=trino_disk_r,
-            disk_w=trino_disk_w)
-        
-        th.write(timing+"\n")
-        th.flush()
-        print(timing)
-
-        req_session = requests.Session()
-        req_session.auth = ("admin", "")
-        response = req_session.get('{trino_coordinator}/v1/query/{query_id}'.format(
-                                        trino_coordinator=args.trino_coordinator,
-                                        query_id=ed.query_id))
-
-        with open("{outdir}/info_{query}.json".format(outdir=outdir, query=query), "w") as fh:
-            fh.write(response.text)
-            fh.close()
-
-        with open("{outdir}/output_{query}.txt".format(outdir=outdir, query=query), "w") as fh:
-            for row in rows: fh.write(",".join(row)+"\n")
-            fh.close()
-            
-        with open("{outdir}/node_series_{query}.json".format(outdir=outdir, query=query), "w") as fh:
-            fh.write(json.dumps({
-                "trino_cpus": trino_cpu_data,
-                "cnode_cpus": cnode_cpu_data,
-                "tnet_in": trino_network_data_in,
-                "tnet_out": trino_network_data_out,
-                "trino_disk_r": trino_disk_reads,
-                "trino_disk_w": trino_disk_writes
-            }))
-            fh.close()
-
-    benchmark_end_time = datetime.datetime.now()
-    elapsed_benchmark_time = benchmark_end_time - benchmark_start_time
-    print("elapsed: {}s (NOT a performance timing metric)".format(str(elapsed_benchmark_time.seconds)))
-    
-    dump_stats(prom, benchmark_start_time, benchmark_end_time, outdir)
-    print("done")
 
 
 def merge_tables(args):

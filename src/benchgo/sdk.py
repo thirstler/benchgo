@@ -2,7 +2,6 @@ import datetime, sys, os, math, time, getpass, platform, pandas as pd
 from pathlib import Path
 from benchgo.transaction_tables import *
 from multiprocessing import Process, Array
-import pyarrow
 from vastdb.api import VastdbApi
 import configparser
 
