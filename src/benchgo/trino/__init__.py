@@ -134,8 +134,31 @@ tpcds_table_row_counts = {
         "web_sales": 7199963324,
         "web_site": 78
     },
-    "sf10000": {
-
+    "sf100000": {
+        "call_center": 60,
+        "catalog_page": 50000,
+        "catalog_returns": 14399376376,
+        "catalog_sales": 143999359221,
+        "customer": 100000000,
+        "customer_address": 50000000,
+        "customer_demographics": 1920800,
+        "date_dim": 73049,
+        "household_demographics": 7200,
+        "income_band": 20,
+        "inventory": 1965337830,
+        "item": 502000,
+        "promotion": 2500,
+        "reason": 75,
+        "ship_mode": 20,
+        "store": 1902,
+        "store_returns": 28799723797,
+        "store_sales": 287998872449,
+        "time_dim": 86400,
+        "warehouse": 30,
+        "web_page": 5004,
+        "web_returns": 7199814812,
+        "web_sales": 72000772436,
+        "web_site": 96
     }
 }
 
