@@ -1,4 +1,4 @@
-import argparse, json, datetime, time, requests, sys
+import argparse, json, datetime, time, requests, sys, os, threading, math
 from benchgo.queries.trino import *
 from benchgo.trino import tpcds_table_row_counts
 from benchgo.trino.util import *
@@ -52,6 +52,7 @@ class TrinoTPCDS(TPCDS):
         if not self.args.skip_precheck:
             if not self.tablecheck():
                 sys.stderr.write("you have a table problem, fix it or --skip-precheck if you know what you're doing\n")
+                sys.exit(1)
             else:
                 print("tables look good")
 
@@ -60,16 +61,87 @@ class TrinoTPCDS(TPCDS):
 
 
         self.logging_setup()
-        self.query_setup()
         self.prometheus_connect()
 
-        print("running benchmark...\n")
-        self.benchmark()
+        if self.args.step_query:
+            self.step_benchmark()
+        else:
+            self.benchmark()
 
-        print("output in {}/result_log.csv".format(self.args.outdir))
+        print("output in {}/result_log.csv".format(self.output_dir))
+
+    def _benchmark_thread(self, id, queries):
+        tc = connection(self.args)
+        self.thread_data[id]['started'] = datetime.datetime.now()
+        for q, query in enumerate(queries):
+            self.thread_data[id]['query_count'] = q
+            self.thread_data[id]['current_query'] = query
+            result = tc.execute(query)
+            getme = result.fetchall()
+        self.thread_data[id]['finished'] = datetime.datetime.now()
+
+
 
     def benchmark(self):
- 
+        
+        print("running TCP-DS benchmark on Trino")
+        print("trino path:   {}.{}".format(self.args.catalog, self.args.schema))
+        print("scale factor: {}".format(self.args.scale_factor))
+        print("concurrenty:  {}".format(self.args.concurrency))
+        print()
+
+        here = os.path.dirname(__file__)
+        threads = []
+        self.thread_data = []
+        for t, stream in enumerate(range(0, int(self.args.concurrency))):
+            file_path = os.path.join(here, '../queries/trino/tpcds/{scale_factor}/{concurrency}/query_{stream}.json'.format(
+                scale_factor=self.args.scale_factor,
+                concurrency=self.args.concurrency,
+                stream=stream))
+            with open(file_path, "r") as jf:
+                queries = json.load(jf) 
+            threads.append(threading.Thread(target=self._benchmark_thread, args=(t, queries,)))
+            self.thread_data.append({
+                'started': None,
+                'finished': None,
+                'query_count': 0,
+                'current_query': ''
+            })
+        
+        benchmark_start_time = datetime.datetime.now()
+        for t in threads:
+            t.start()
+
+        # Poll
+        print("elapsed time   | stream percent of queries finished...")
+        print("---------------|--------------------------------------")
+        while True:
+            
+            tc = int(self.args.concurrency)
+            for t in threads:
+                if not t.is_alive():
+                    tc -= 1
+            if tc == 0: break
+            time.sleep(1)
+            nownow = datetime.datetime.now()
+            delta = nownow - benchmark_start_time
+            sys.stdout.write("\r{} | ".format(delta))
+            sys.stdout.write(" | ".join([ "{}%".format( math.ceil(x["query_count"]*100/103) ) for i, x in enumerate(self.thread_data)]))
+
+        
+        for t in threads:
+            t.join()
+
+        print("\ndone")
+
+            
+
+
+    def step_benchmark(self):
+        
+        # Grab queries for the selected scale factor
+        self.query_setup()
+
         # Go        
         benchmark_start_time = datetime.datetime.now()
 
@@ -83,7 +155,6 @@ class TrinoTPCDS(TPCDS):
         print(header)
 
         for query in self.queries:
-  
             row_count += 1
 
             ###################################################################

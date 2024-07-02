@@ -37,9 +37,12 @@ def tpcds_args(parser) -> None:
     parser.add_argument("--scale-factor", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the scale factor for queries, not the data set")
     parser.add_argument("--no-explain", action="store_true", help="do not include EXPLAIN in queries")
     parser.add_argument("--no-analyze", action="store_true", help="do not include ANALYZE in queries")
+    parser.add_argument("--step-query", action="store_true", help="run queries individually (if available) rather than full benchmark (single concurrency only)")
+    parser.add_argument("--concurrency", default="1", help="specifcy concurrency for benchmark run")
 
 def global_args(parser) -> None:
     parser.add_argument("--name", default="benchgo", help="name this workload; determines the base name of the output directory")
+    parser.add_argument("--outdir", default="/tmp/", help="specify output direcotry for benchmark results")
 
 
 def transaction_options(parser) -> None:
