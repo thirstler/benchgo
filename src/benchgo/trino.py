@@ -5,7 +5,7 @@ from trino.auth import BasicAuthentication
 from urllib.parse import urlparse
 from benchgo.queries.trino.tpcds_sf10000_queries import *
 from benchgo.queries.trino.tpcds_sf1000_queries import *
-from benchgo.prometheus_handlers import *
+from benchgo.prometheus_handler import *
 from benchgo.queries.trino.tpcds_selective_queries import *
 from benchgo.transaction_tables import sf_cols
 from multiprocessing import Process

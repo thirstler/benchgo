@@ -8,23 +8,19 @@ E.g.:
 
     benchgo trino tpcds --help
 
-The following this list of implemented and plannded benchmarks:
+The following this list of implemented and planned benchmarks:
 
+    # Generate data for transaction and throughput/filter tests
+    benchgo mkdata transaction --help
+    
     # Trino workloads
     benchgo trino tpcds --help
     benchgo trino tpch --help           [Not Implimented]
     benchgo trino transaction --help    [Not Implimented]
     benchgo trino throughput --help     [Not Implimented]
 
-    # SparkSQL workloads
-    benchgo sparksql tpcds --help
-    benchgo sparksql tpch --help        [Not Implimented]
-    benchgo sparksql transaction --help [Not Implimented]
-    benchgo sparksql throughput --help  [Not Implimented]
-
-    # Spark data frame workloads
-    benchgo sparkdf transaction --help [Not Implimented]
-    benchgo sparkdf throughput --help  [Not Implimented]
+    # Spark workloads (see help on use of spark scripts)
+    benchgo spark --help
 
     # Dremio 
     benchgo dremio tpcds --help         [Not Implimented]
@@ -34,57 +30,69 @@ The following this list of implemented and plannded benchmarks:
     # VAST DB SDK 
     benchgo vastdbsdk transaction --help   [Not Implimented]
     benchgo vastdbsdk throughput --help    [Not Implimented]
+
+'''
+MKDATA_HELP='''
+Create data for transaction and throughput workloads
+
+    benchgo mkdata transaction --help
+    
 '''
 TRINO_HELP='''
 Execute a benchmark with the Trino engine
 
     benchgo trino [benchmark] [options]
 
- The following this list of implemented and plannded benchmarks:
+List of implemented and planned benchmarks:
 
     benchgo trino tpcds --help
     benchgo trino tpch --help           [Not Implimented]
     benchgo trino transaction --help    [Not Implimented]
-    benchgo trino throughput --help     [Not Implimented]   
+    benchgo trino throughput --help     [Not Implimented]
+
 '''
-SQPARKSQL_HELP='''
-Execute a benchmark with the SparkSQL engine
+SPARK_HELP='''
+Working with spark is different from the other engines since benchmark 
+profiles need to be wrapped in spark-submit. Also, all configuration for
+the engine itself is done through the driver program making the list of 
+command line options very lengthy. For this reason you need to populate
+a configuration file with all of your spark options and benchmark profile
+settings and then use the benchgo_spark wrapper to execute:
 
-    benchgo sparksql [benchmark] [options]
+To create an empty configuration use:
 
- The following this list of implemented and plannded benchmarks:
+    benchgo spark genconfig
 
-    benchgo sparksql tpcds --help
-    benchgo sparksql tpch --help           [Not Implimented]
-    benchgo sparksql transaction --help    [Not Implimented]
-    benchgo sparksql throughput --help     [Not Implimented]   
-'''
-SPARKDF_HELP='''
-Execute a benchmark with the Spark data frame interface
+This will populate an empty config file and environment file:
 
-    benchgo sparkdf [benchmark] [options]
+    ~/.benchgo/benchgo_spark.yaml
+    ~/.benchgo/sparkenv
 
- The following this list of implemented and plannded benchmarks:
-    benchgo sparkdf transaction --help    [Not Implimented]
-    benchgo sparkdf throughput --help     [Not Implimented]   
+Configure these files and run:
+
+    benchgo_spark
+
 '''
 DREMIO_HELP='''
 Execute a benchmark with the Dremio engine
 
     benchgo dremio [benchmark] [options]
 
- The following this list of implemented and plannded benchmarks:
+List of implemented and planned benchmarks:
 
     benchgo dremio tpcds --help
     benchgo dremio tpch --help           [Not Implimented]
-    benchgo dremio throughput --help     [Not Implimented]   
+    benchgo dremio throughput --help     [Not Implimented]
+
 '''
 VASTDBSDK_HELP='''
 Execute a benchmark with the VAST DataBase Python SDK
 
     benchgo vastdbsdk [benchmark] [options]
 
- The following this list of implemented and plannded benchmarks:
+List of implemented and planned benchmarks:
+
     benchgo vastdbsdk transaction --help    [Not Implimented]
     benchgo vastdbsdk throughput --help     [Not Implimented]
+
 '''

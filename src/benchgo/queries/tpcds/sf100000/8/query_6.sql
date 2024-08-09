@@ -157,7 +157,7 @@ where asceding.rnk = descending.rnk
   and i1.i_item_sk=asceding.item_sk
   and i2.i_item_sk=descending.item_sk
 order by asceding.rnk
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 44;
 
 
@@ -172,8 +172,8 @@ from
   ,customer_address
   ,web_site
 where
-    d_date between '1999-2-01' and 
-           (cast('1999-2-01' as date) + 60 days)
+    d_date between date(date(date('1999-2-01'))) and 
+           (cast(date(date('1999-2-01')) as date) + interval '60' day)
 and ws1.ws_ship_date_sk = d_date_sk
 and ws1.ws_ship_addr_sk = ca_address_sk
 and ca_state = 'KY'
@@ -187,7 +187,7 @@ and not exists(select *
                from web_returns wr1
                where ws1.ws_order_number = wr1.wr_order_number)
 order by count(distinct ws_order_number)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 94;
 
 
@@ -247,7 +247,7 @@ order by s_store_name
         ,s_county
         ,s_state
         ,s_zip
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 50;
 
 
@@ -278,8 +278,8 @@ with ssr as
      date_dim,
      store
  where date_sk = d_date_sk
-       and d_date between cast('2002-08-08' as date) 
-                  and (cast('2002-08-08' as date) +  14 days)
+       and d_date between cast(date(date('2002-08-08')) as date) 
+                  and (cast(date(date('2002-08-08')) as date) + interval '14' day)
        and store_sk = s_store_sk
  group by s_store_id)
  ,
@@ -309,8 +309,8 @@ with ssr as
      date_dim,
      catalog_page
  where date_sk = d_date_sk
-       and d_date between cast('2002-08-08' as date)
-                  and (cast('2002-08-08' as date) +  14 days)
+       and d_date between cast(date(date('2002-08-08')) as date)
+                  and (cast(date(date('2002-08-08')) as date) + interval '14' day)
        and page_sk = cp_catalog_page_sk
  group by cp_catalog_page_id)
  ,
@@ -342,8 +342,8 @@ with ssr as
      date_dim,
      web_site
  where date_sk = d_date_sk
-       and d_date between cast('2002-08-08' as date)
-                  and (cast('2002-08-08' as date) +  14 days)
+       and d_date between cast(date(date('2002-08-08')) as date)
+                  and (cast(date(date('2002-08-08')) as date) + interval '14' day)
        and wsr_web_site_sk = web_site_sk
  group by web_site_id)
   select  channel
@@ -376,7 +376,7 @@ with ssr as
  group by rollup (channel, id)
  order by channel
          ,id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 5;
 
 
@@ -405,7 +405,7 @@ where case when avg_quarterly_sales > 0
 order by avg_quarterly_sales,
 	 sum_sales,
 	 i_manufact_id
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 53;
 
 
@@ -427,7 +427,7 @@ select  i_item_id,
        d_year = 2000 
  group by i_item_id
  order by i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 7;
 
 
@@ -443,7 +443,7 @@ with ss_items as
                   from date_dim
                   where d_week_seq = (select d_week_seq 
                                       from date_dim
-                                      where d_date = '2002-05-24'))
+                                      where d_date = date(date('2002-05-24'))))
    and ss_sold_date_sk   = d_date_sk
  group by i_item_id),
  cs_items as
@@ -457,7 +457,7 @@ with ss_items as
                   from date_dim
                   where d_week_seq = (select d_week_seq 
                                       from date_dim
-                                      where d_date = '2002-05-24'))
+                                      where d_date = date(date('2002-05-24'))))
   and  cs_sold_date_sk = d_date_sk
  group by i_item_id),
  ws_items as
@@ -471,7 +471,7 @@ with ss_items as
                   from date_dim
                   where d_week_seq =(select d_week_seq 
                                      from date_dim
-                                     where d_date = '2002-05-24'))
+                                     where d_date = date(date('2002-05-24'))))
   and ws_sold_date_sk   = d_date_sk
  group by i_item_id)
   select  ss_items.item_id
@@ -493,7 +493,7 @@ with ss_items as
    and ws_item_rev between 0.9 * cs_item_rev and 1.1 * cs_item_rev
  order by item_id
          ,ss_item_rev
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 58;
 
 
@@ -512,8 +512,8 @@ select  i_item_id
  where cs_item_sk = i_item_sk 
    and i_category in ('Shoes', 'Home', 'Men')
    and cs_sold_date_sk = d_date_sk
- and d_date between cast('2002-04-03' as date) 
- 				and (cast('2002-04-03' as date) + 30 days)
+ and d_date between cast(date(date('2002-04-03')) as date) 
+ 				and (cast(date(date('2002-04-03')) as date) + interval '30' day)
  group by i_item_id
          ,i_item_desc 
          ,i_category
@@ -524,7 +524,7 @@ select  i_item_id
          ,i_item_id
          ,i_item_desc
          ,revenueratio
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 20;
 
 
@@ -595,7 +595,7 @@ WITH all_sales AS (
    AND prev_yr.d_year=1999-1
    AND CAST(curr_yr.sales_cnt AS DECIMAL(17,2))/CAST(prev_yr.sales_cnt AS DECIMAL(17,2))<0.9
  ORDER BY sales_cnt_diff,sales_amt_diff
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 75;
 
 
@@ -687,7 +687,7 @@ select
    lochierarchy desc
   ,case when lochierarchy = 0 then i_category end
   ,rank_within_parent
-   fetch first 100 rows only;
+   limit 100;
 SELECT QUERY_NUMER FROM 36;
 
 
@@ -769,7 +769,7 @@ with year_total as (
          ,t_s_secyear.customer_first_name
          ,t_s_secyear.customer_last_name
          ,t_s_secyear.customer_preferred_cust_flag
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 11;
 
 
@@ -786,8 +786,8 @@ with ssr as
      item,
      promotion
  where ss_sold_date_sk = d_date_sk
-       and d_date between cast('1999-08-21' as date) 
-                  and (cast('1999-08-21' as date) +  30 days)
+       and d_date between cast(date(date('1999-08-21')) as date) 
+                  and (cast(date(date('1999-08-21')) as date) + interval '30' day)
        and ss_store_sk = s_store_sk
        and ss_item_sk = i_item_sk
        and i_current_price > 50
@@ -807,8 +807,8 @@ with ssr as
      item,
      promotion
  where cs_sold_date_sk = d_date_sk
-       and d_date between cast('1999-08-21' as date)
-                  and (cast('1999-08-21' as date) +  30 days)
+       and d_date between cast(date(date('1999-08-21')) as date)
+                  and (cast(date(date('1999-08-21')) as date) + interval '30' day)
         and cs_catalog_page_sk = cp_catalog_page_sk
        and cs_item_sk = i_item_sk
        and i_current_price > 50
@@ -828,8 +828,8 @@ group by cp_catalog_page_id)
      item,
      promotion
  where ws_sold_date_sk = d_date_sk
-       and d_date between cast('1999-08-21' as date)
-                  and (cast('1999-08-21' as date) +  30 days)
+       and d_date between cast(date(date('1999-08-21')) as date)
+                  and (cast(date(date('1999-08-21')) as date) + interval '30' day)
         and ws_web_site_sk = web_site_sk
        and ws_item_sk = i_item_sk
        and i_current_price > 50
@@ -866,7 +866,7 @@ group by web_site_id)
  group by rollup (channel, id)
  order by channel
          ,id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 80;
 
 
@@ -937,7 +937,7 @@ select  ss_customer_sk
               and r_reason_desc = 'Lost my job') t
       group by ss_customer_sk
       order by sumsales, ss_customer_sk
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 93;
 
 
@@ -950,8 +950,8 @@ from
 where
 i_manufact_id = 54
 and i_item_sk = cs_item_sk 
-and d_date between '2000-02-15' and 
-        (cast('2000-02-15' as date) + 90 days)
+and d_date between date(date(date('2000-02-15'))) and 
+        (cast(date(date('2000-02-15')) as date) + interval '90' day)
 and d_date_sk = cs_sold_date_sk 
 and cs_ext_discount_amt  
      > ( 
@@ -962,11 +962,11 @@ and cs_ext_discount_amt
            ,date_dim
          where 
               cs_item_sk = i_item_sk 
-          and d_date between '2000-02-15' and
-                             (cast('2000-02-15' as date) + 90 days)
+          and d_date between date(date(date('2000-02-15'))) and
+                             (cast(date(date('2000-02-15')) as date) + interval '90' day)
           and d_date_sk = cs_sold_date_sk 
       ) 
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 32;
 
 
@@ -995,7 +995,7 @@ group by i_category, i_class, i_brand,
          s_store_name, s_company_name, d_moy) tmp1
 where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
 order by sum_sales - avg_monthly_sales, s_store_name
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 89;
 
 
@@ -1049,7 +1049,7 @@ from (select avg(ss_list_price) B1_LP
         and (ss_list_price between 190 and 190+10
           or ss_coupon_amt between 11706 and 11706+1000
           or ss_wholesale_cost between 1 and 1+20)) B6
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 28;
 
 
@@ -1108,7 +1108,7 @@ select  i_item_id,
         ca_state, 
         ca_county,
 	i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 18;
 
 
@@ -1170,7 +1170,7 @@ with year_total as (
          and case when t_w_firstyear.year_total > 0 then t_w_secyear.year_total / t_w_firstyear.year_total else null end
            > case when t_s_firstyear.year_total > 0 then t_s_secyear.year_total / t_s_firstyear.year_total else null end
  order by 1,3,2
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 74;
 
 
@@ -1197,7 +1197,7 @@ select  a.ca_state state, count(*) cnt
  group by a.ca_state
  having count(*) >= 10
  order by cnt, a.ca_state 
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 6;
 
 
@@ -1227,7 +1227,7 @@ select
        s_store_sk = sc.ss_store_sk and
        i_item_sk = sc.ss_item_sk
  order by s_store_name, i_item_desc
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 65;
 
 
@@ -1249,7 +1249,7 @@ select  c_customer_id as customer_id
    and hd_demo_sk = c_current_hdemo_sk
    and sr_cdemo_sk = cd_demo_sk
  order by c_customer_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 84;
 
 
@@ -1354,7 +1354,7 @@ with  cross_items as
  ) y
  group by rollup (channel, i_brand_id,i_class_id,i_category_id)
  order by channel,i_brand_id,i_class_id,i_category_id
-  fetch first 100 rows only;
+  limit 100;
 with  cross_items as
  (select i_item_sk ss_item_sk
  from item,
@@ -1460,7 +1460,7 @@ with  cross_items as
    and this_year.i_class_id = last_year.i_class_id
    and this_year.i_category_id = last_year.i_category_id
  order by this_year.channel, this_year.i_brand_id, this_year.i_class_id, this_year.i_category_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 14;
 
 
@@ -1484,7 +1484,7 @@ select  count(*) from (
       and web_sales.ws_bill_customer_sk = customer.c_customer_sk
       and d_month_seq between 1180 and 1180 + 11
 ) hot_cust
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 38;
 
 
@@ -1615,7 +1615,7 @@ select  dt.d_year
  order by       sum(ss_ext_sales_price) desc,dt.d_year
  		,item.i_category_id
  		,item.i_category
- fetch first 100 rows only ;
+ limit 100 ;
 SELECT QUERY_NUMER FROM 42;
 
 
@@ -1663,7 +1663,7 @@ select
    ,i_item_desc
    ,s_store_id
    ,s_store_name
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 29;
 
 
@@ -1687,13 +1687,13 @@ left outer join promotion on (cs_promo_sk=p_promo_sk)
 left outer join catalog_returns on (cr_item_sk = cs_item_sk and cr_order_number = cs_order_number)
 where d1.d_week_seq = d2.d_week_seq
   and inv_quantity_on_hand < cs_quantity 
-  and d3.d_date > d1.d_date + 5
+  and d3.d_date > d1.d_date + interval '5' day
   and hd_buy_potential = '501-1000'
   and d1.d_year = 2001
   and cd_marital_status = 'U'
 group by i_item_desc,w_warehouse_name,d1.d_week_seq
 order by total_cnt desc, i_item_desc, w_warehouse_name, d_week_seq
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 72;
 
 
@@ -1746,7 +1746,7 @@ from
          and ws_sold_date_sk = d_date_sk 
          and ws_item_sk in (select item_sk from frequent_ss_items)
          and ws_bill_customer_sk in (select c_customer_sk from best_ss_customer)) 
-  fetch first 100 rows only;
+  limit 100;
 with frequent_ss_items as
  (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
   from store_sales
@@ -1801,7 +1801,7 @@ with frequent_ss_items as
          and ws_bill_customer_sk = c_customer_sk
        group by c_last_name,c_first_name) 
      order by c_last_name,c_first_name,sales
-   fetch first 100 rows only;
+   limit 100;
 SELECT QUERY_NUMER FROM 23;
 
 
@@ -1823,7 +1823,7 @@ select  i_item_id,
        d_year = 2002 
  group by i_item_id
  order by i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 26;
 
 
@@ -1871,7 +1871,7 @@ select
           cd_education_status,
           cd_purchase_estimate,
           cd_credit_rating
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 69;
 
 
@@ -1923,7 +1923,7 @@ with v1 as(
         avg_monthly_sales > 0 and
         case when avg_monthly_sales > 0 then abs(sum_sales - avg_monthly_sales) / avg_monthly_sales else null end > 0.1
  order by sum_sales - avg_monthly_sales, psum
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 47;
 
 
@@ -1935,13 +1935,13 @@ select  i_item_id
  where i_current_price between 22 and 22+30
  and inv_item_sk = i_item_sk
  and d_date_sk=inv_date_sk
- and d_date between cast('1998-02-12' as date) and (cast('1998-02-12' as date) +  60 days)
+ and d_date between cast(date(date('1998-02-12')) as date) and (cast(date(date('1998-02-12')) as date) + interval '60' day)
  and i_manufact_id in (285,218,610,126)
  and inv_quantity_on_hand between 100 and 500
  and ss_item_sk = i_item_sk
  group by i_item_id,i_item_desc,i_current_price
  order by i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 82;
 
 
@@ -2039,7 +2039,7 @@ with wss as
  where s_store_id1=s_store_id2
    and d_week_seq1=d_week_seq2-52
  order by s_store_name1,s_store_id1,d_week_seq1
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 59;
 
 
@@ -2169,7 +2169,7 @@ select  channel, item, return_ratio, return_rank, currency_rank from
  )
  )
  order by 1,4,5,2
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 49;
 
 
@@ -2245,7 +2245,7 @@ where i_category in ('Sports'))
         select * from ws) tmp1
  group by i_manufact_id
  order by total_sales
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 33;
 
 
@@ -2272,7 +2272,7 @@ select
    lochierarchy desc,
    case when lochierarchy = 0 then i_category end,
    rank_within_parent
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 86;
 
 
@@ -2308,7 +2308,7 @@ group by
 order by substr(w_warehouse_name,1,20)
         ,sm_type
         ,cc_name
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 99;
 
 
@@ -2425,7 +2425,7 @@ union all
          ,t_s_secyear.customer_first_name
          ,t_s_secyear.customer_last_name
          ,t_s_secyear.customer_login
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 4;
 
 
@@ -2446,7 +2446,7 @@ select  ca_zip, ca_city, sum(ws_sales_price)
  	and d_qoy = 2 and d_year = 1999
  group by ca_zip, ca_city
  order by ca_zip, ca_city
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 45;
 
 
@@ -2531,7 +2531,7 @@ order by substr(r_reason_desc,1,20)
         ,avg(ws_quantity)
         ,avg(wr_refunded_cash)
         ,avg(wr_fee)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 85;
 
 
@@ -2640,7 +2640,7 @@ select  s_store_name
   and (substr(s_zip,1,2) = substr(V1.ca_zip,1,2))
  group by s_store_name
  order by s_store_name
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 8;
 
 
@@ -2666,7 +2666,7 @@ select  i_brand_id brand_id, i_brand brand, i_manufact_id, i_manufact,
          ,i_brand_id
          ,i_manufact_id
          ,i_manufact
- fetch first 100 rows only ;
+ limit 100 ;
 SELECT QUERY_NUMER FROM 19;
 
 
@@ -2711,7 +2711,7 @@ from
    and   d_year = 2002
    and   d_moy  = 11) all_sales
 order by promotions, total
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 61;
 
 
@@ -2733,7 +2733,7 @@ select  dt.d_year
  order by dt.d_year
          ,sum_agg desc
          ,brand_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 3;
 
 
@@ -2786,7 +2786,7 @@ select  distinct(i_product_name)
         (i_size = 'economy' or i_size = 'N/A')
         )))) > 0
  order by i_product_name
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 41;
 
 
@@ -2843,7 +2843,7 @@ with my_customers as (
  from segments
  group by segment
  order by segment, num_customers
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 54;
 
 
@@ -2888,7 +2888,7 @@ order by i_category
         ,s_store_id
         ,sumsales
         ,rk
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 67;
 
 
@@ -2901,8 +2901,8 @@ with ss as
       date_dim,
       store
  where ss_sold_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date) 
-                  and (cast('2000-08-04' as date) +  30 days) 
+       and d_date between cast(date(date('2000-08-04')) as date) 
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day) 
        and ss_store_sk = s_store_sk
  group by s_store_sk)
  ,
@@ -2914,8 +2914,8 @@ with ss as
       date_dim,
       store
  where sr_returned_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date)
-                  and (cast('2000-08-04' as date) +  30 days)
+       and d_date between cast(date(date('2000-08-04')) as date)
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day)
        and sr_store_sk = s_store_sk
  group by s_store_sk), 
  cs as
@@ -2925,8 +2925,8 @@ with ss as
  from catalog_sales,
       date_dim
  where cs_sold_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date)
-                  and (cast('2000-08-04' as date) +  30 days)
+       and d_date between cast(date(date('2000-08-04')) as date)
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day)
  group by cs_call_center_sk 
  ), 
  cr as
@@ -2936,8 +2936,8 @@ with ss as
  from catalog_returns,
       date_dim
  where cr_returned_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date)
-                  and (cast('2000-08-04' as date) +  30 days)
+       and d_date between cast(date(date('2000-08-04')) as date)
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day)
  group by cr_call_center_sk
  ), 
  ws as
@@ -2948,8 +2948,8 @@ with ss as
       date_dim,
       web_page
  where ws_sold_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date)
-                  and (cast('2000-08-04' as date) +  30 days)
+       and d_date between cast(date(date('2000-08-04')) as date)
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day)
        and ws_web_page_sk = wp_web_page_sk
  group by wp_web_page_sk), 
  wr as
@@ -2960,8 +2960,8 @@ with ss as
       date_dim,
       web_page
  where wr_returned_date_sk = d_date_sk
-       and d_date between cast('2000-08-04' as date)
-                  and (cast('2000-08-04' as date) +  30 days)
+       and d_date between cast(date(date('2000-08-04')) as date)
+                  and (cast(date(date('2000-08-04')) as date) + interval '30' day)
        and wr_web_page_sk = wp_web_page_sk
  group by wp_web_page_sk)
   select  channel
@@ -2997,7 +2997,7 @@ with ss as
  group by rollup (channel, id)
  order by channel
          ,id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 77;
 
 
@@ -3018,7 +3018,7 @@ select  ca_zip
  	and d_qoy = 2 and d_year = 2000
  group by ca_zip
  order by ca_zip
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 15;
 
 
@@ -3064,7 +3064,7 @@ from (select item_sk
 where web_cumulative > store_cumulative
 order by item_sk
         ,d_date
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 51;
 
 
@@ -3085,8 +3085,8 @@ where
 	ss_item_sk = i_item_sk 
   	and i_category in ('Jewelry', 'Children', 'Sports')
   	and ss_sold_date_sk = d_date_sk
-	and d_date between cast('1998-05-15' as date) 
-				and (cast('1998-05-15' as date) + 30 days)
+	and d_date between cast(date(date('1998-05-15')) as date) 
+				and (cast(date(date('1998-05-15')) as date) + interval '30' day)
 group by 
 	i_item_id
         ,i_item_desc 
@@ -3134,7 +3134,7 @@ group by
 order by substr(w_warehouse_name,1,20)
         ,sm_type
        ,web_name
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 62;
 
 
@@ -3160,7 +3160,7 @@ group by cs_bill_customer_sk
       ,sum(case when ssci.customer_sk is not null and csci.customer_sk is not null then 1 else 0 end) store_and_catalog
 from ssci full outer join csci on (ssci.customer_sk=csci.customer_sk
                                and ssci.item_sk = csci.item_sk)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 97;
 
 
@@ -3181,7 +3181,7 @@ select  i_product_name
                        ,i_class
                        ,i_category)
 order by qoh, i_product_name, i_brand, i_class, i_category
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 22;
 
 
@@ -3334,7 +3334,7 @@ select
     group by ss_ticket_number,ss_customer_sk,ss_addr_sk,store.s_city) ms,customer
     where ss_customer_sk = c_customer_sk
  order by c_last_name,c_first_name,substr(s_city,1,30), profit
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 79;
 
 
@@ -3404,7 +3404,7 @@ where i_color in ('thistle','cornsilk','cornflower'))
  group by i_item_id
  order by total_sales,
           i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 56;
 
 
@@ -3416,13 +3416,13 @@ select  i_item_id
  where i_current_price between 14 and 14 + 30
  and inv_item_sk = i_item_sk
  and d_date_sk=inv_date_sk
- and d_date between cast('2002-07-16' as date) and (cast('2002-07-16' as date) +  60 days)
+ and d_date between cast(date(date('2002-07-16')) as date) and (cast(date(date('2002-07-16')) as date) + interval '60' day)
  and i_manufact_id in (797,849,795,923)
  and inv_quantity_on_hand between 100 and 500
  and cs_item_sk = i_item_sk
  group by i_item_id,i_item_desc,i_current_price
  order by i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 37;
 
 
@@ -3482,7 +3482,7 @@ select
           cd_dep_count,
           cd_dep_employed_count,
           cd_dep_college_count
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 10;
 
 
@@ -3505,7 +3505,7 @@ select  cast(amc as decimal(15,4))/cast(pmc as decimal(15,4)) am_pm_ratio
          and household_demographics.hd_dep_count = 5
          and web_page.wp_char_count between 5000 and 5200) pt
  order by am_pm_ratio
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 90;
 
 
@@ -3513,10 +3513,10 @@ SELECT QUERY_NUMER FROM 90;
 select  *
  from(select w_warehouse_name
             ,i_item_id
-            ,sum(case when (cast(d_date as date) < cast ('1999-02-08' as date))
+            ,sum(case when (cast(d_date as date) < cast (date(date('1999-02-08')) as date))
 	                then inv_quantity_on_hand 
                       else 0 end) as inv_before
-            ,sum(case when (cast(d_date as date) >= cast ('1999-02-08' as date))
+            ,sum(case when (cast(d_date as date) >= cast (date(date('1999-02-08')) as date))
                       then inv_quantity_on_hand 
                       else 0 end) as inv_after
    from inventory
@@ -3527,8 +3527,8 @@ select  *
      and i_item_sk          = inv_item_sk
      and inv_warehouse_sk   = w_warehouse_sk
      and inv_date_sk    = d_date_sk
-     and d_date between (cast ('1999-02-08' as date) - 30 days)
-                    and (cast ('1999-02-08' as date) + 30 days)
+     and d_date between (cast (date(date('1999-02-08')) as date) - interval '30' day)
+                    and (cast (date(date('1999-02-08')) as date) + interval '30' day)
    group by w_warehouse_name, i_item_id) x
  where (case when inv_before > 0 
              then inv_after / inv_before 
@@ -3536,7 +3536,7 @@ select  *
              end) between 2.0/3.0 and 3.0/2.0
  order by w_warehouse_name
          ,i_item_id
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 21;
 
 
@@ -3572,7 +3572,7 @@ select  c_last_name
           ,ca_city
           ,bought_city
           ,ss_ticket_number
-   fetch first 100 rows only;
+   limit 100;
 SELECT QUERY_NUMER FROM 46;
 
 
@@ -3590,7 +3590,7 @@ with sr_items as
 	where d_week_seq in 
 		(select d_week_seq
 		from date_dim
-	  where d_date in ('2002-04-18','2002-10-16','2002-11-03')))
+	  where d_date in (date(date('2002-04-18')),date(date('2002-10-16')),date(date('2002-11-03')))))
  and   sr_returned_date_sk   = d_date_sk
  group by i_item_id),
  cr_items as
@@ -3606,7 +3606,7 @@ with sr_items as
 	where d_week_seq in 
 		(select d_week_seq
 		from date_dim
-	  where d_date in ('2002-04-18','2002-10-16','2002-11-03')))
+	  where d_date in (date(date('2002-04-18')),date(date('2002-10-16')),date(date('2002-11-03')))))
  and   cr_returned_date_sk   = d_date_sk
  group by i_item_id),
  wr_items as
@@ -3622,7 +3622,7 @@ with sr_items as
 	where d_week_seq in 
 		(select d_week_seq
 		from date_dim
-		where d_date in ('2002-04-18','2002-10-16','2002-11-03')))
+		where d_date in (date(date('2002-04-18')),date(date('2002-10-16')),date(date('2002-11-03')))))
  and   wr_returned_date_sk   = d_date_sk
  group by i_item_id)
   select  sr_items.item_id
@@ -3640,7 +3640,7 @@ with sr_items as
    and sr_items.item_id=wr_items.item_id 
  order by sr_items.item_id
          ,sr_item_qty
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 83;
 
 
@@ -3657,7 +3657,7 @@ where ss_sold_time_sk = time_dim.t_time_sk
     and household_demographics.hd_dep_count = 2
     and store.s_store_name = 'ese'
 order by count(*)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 96;
 
 
@@ -3700,7 +3700,7 @@ select  c_last_name
    and current_addr.ca_city <> bought_city
  order by c_last_name
          ,ss_ticket_number
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 68;
 
 
@@ -3730,7 +3730,7 @@ where case when avg_monthly_sales > 0 then abs (sum_sales - avg_monthly_sales) /
 order by i_manager_id
         ,avg_monthly_sales
         ,sum_sales
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 63;
 
 
@@ -3744,8 +3744,8 @@ from
 where
 i_manufact_id = 365
 and i_item_sk = ws_item_sk 
-and d_date between '2000-01-30' and 
-        (cast('2000-01-30' as date) + 90 days)
+and d_date between date(date(date('2000-01-30'))) and 
+        (cast(date(date('2000-01-30')) as date) + interval '90' day)
 and d_date_sk = ws_sold_date_sk 
 and ws_ext_discount_amt  
      > ( 
@@ -3756,12 +3756,12 @@ and ws_ext_discount_amt
            ,date_dim
          WHERE 
               ws_item_sk = i_item_sk 
-          and d_date between '2000-01-30' and
-                             (cast('2000-01-30' as date) + 90 days)
+          and d_date between date(date(date('2000-01-30'))) and
+                             (cast(date(date('2000-01-30')) as date) + interval '90' day)
           and d_date_sk = ws_sold_date_sk 
       ) 
 order by sum(ws_ext_discount_amt)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 92;
 
 
@@ -3785,7 +3785,7 @@ select  i_item_id,
  group by rollup (i_item_id, s_state)
  order by i_item_id
          ,s_state
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 27;
 
 
@@ -3806,8 +3806,8 @@ where
 	ws_item_sk = i_item_sk 
   	and i_category in ('Jewelry', 'Electronics', 'Men')
   	and ws_sold_date_sk = d_date_sk
-	and d_date between cast('1999-06-30' as date) 
-				and (cast('1999-06-30' as date) + 30 days)
+	and d_date between cast(date(date('1999-06-30')) as date) 
+				and (cast(date(date('1999-06-30')) as date) + interval '30' day)
 group by 
 	i_item_id
         ,i_item_desc 
@@ -3820,7 +3820,7 @@ order by
         ,i_item_id
         ,i_item_desc
         ,revenueratio
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 12;
 
 
@@ -3962,8 +3962,8 @@ from
   ,customer_address
   ,web_site
 where
-    d_date between '1999-2-01' and 
-           (cast('1999-2-01' as date) + 60 days)
+    d_date between date(date(date('1999-2-01'))) and 
+           (cast(date(date('1999-2-01')) as date) + interval '60' day)
 and ws1.ws_ship_date_sk = d_date_sk
 and ws1.ws_ship_addr_sk = ca_address_sk
 and ca_state = 'LA'
@@ -3975,7 +3975,7 @@ and ws1.ws_order_number in (select wr_order_number
                             from web_returns,ws_wh
                             where wr_order_number = ws_wh.ws_order_number)
 order by count(distinct ws_order_number)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 95;
 
 
@@ -4089,7 +4089,7 @@ select
           cd_dep_count,
           cd_dep_employed_count,
           cd_dep_college_count
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 35;
 
 
@@ -4148,7 +4148,7 @@ order by
   other_chan_wholesale_cost,
   other_chan_sales_price,
   ratio
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 78;
 
 
@@ -4197,7 +4197,7 @@ with v1 as(
         avg_monthly_sales > 0 and
         case when avg_monthly_sales > 0 then abs(sum_sales - avg_monthly_sales) / avg_monthly_sales else null end > 0.1
  order by sum_sales - avg_monthly_sales, sum_sales
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 57;
 
 
@@ -4418,7 +4418,7 @@ select
  	,ship_carriers
        ,year
  order by w_warehouse_name
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 66;
 
 
@@ -4491,7 +4491,7 @@ with customer_total_return as
  order by c_customer_id,c_salutation,c_first_name,c_last_name,c_preferred_cust_flag
                   ,c_birth_day,c_birth_month,c_birth_year,c_birth_country,c_login,c_email_address
                   ,c_last_review_date_sk,ctr_total_return
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 30;
 
 
@@ -4517,7 +4517,7 @@ and s_store_sk = ctr1.ctr_store_sk
 and s_state = 'TX'
 and ctr1.ctr_customer_sk = c_customer_sk
 order by c_customer_id
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 1;
 
 
@@ -4549,7 +4549,7 @@ with customer_total_return as
  order by c_customer_id,c_salutation,c_first_name,c_last_name,ca_street_number,ca_street_name
                    ,ca_street_type,ca_suite_number,ca_city,ca_county,ca_state,ca_zip,ca_country,ca_gmt_offset
                   ,ca_location_type,ctr_total_return
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 81;
 
 
@@ -4569,7 +4569,7 @@ select  s_store_name, s_store_id,
        d_year = 1999 
  group by s_store_name, s_store_id
  order by s_store_name, s_store_id,sun_sales,mon_sales,tue_sales,wed_sales,thu_sales,fri_sales,sat_sales
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 43;
 
 
@@ -4592,7 +4592,7 @@ select  dt.d_year
  order by dt.d_year
  	,ext_price desc
  	,brand_id
- fetch first 100 rows only ;
+ limit 100 ;
 SELECT QUERY_NUMER FROM 52;
 
 
@@ -4670,7 +4670,7 @@ select  channel, col_name, d_year, d_qoy, i_category, COUNT(*) sales_cnt, SUM(ex
            AND cs_item_sk=i_item_sk) foo
 GROUP BY channel, col_name, d_year, d_qoy, i_category
 ORDER BY channel, col_name, d_year, d_qoy, i_category
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 76;
 
 
@@ -4716,7 +4716,7 @@ select  i_item_id
  order by i_item_id
          ,i_item_desc
          ,s_state
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 17;
 
 
@@ -4765,7 +4765,7 @@ select
  ,i_item_desc
  ,s_store_id
  ,s_store_name
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 25;
 
 
@@ -4773,9 +4773,9 @@ SELECT QUERY_NUMER FROM 25;
 select  
    w_state
   ,i_item_id
-  ,sum(case when (cast(d_date as date) < cast ('2002-03-14' as date)) 
+  ,sum(case when (cast(d_date as date) < cast (date(date('2002-03-14')) as date)) 
  		then cs_sales_price - coalesce(cr_refunded_cash,0) else 0 end) as sales_before
-  ,sum(case when (cast(d_date as date) >= cast ('2002-03-14' as date)) 
+  ,sum(case when (cast(d_date as date) >= cast (date(date('2002-03-14')) as date)) 
  		then cs_sales_price - coalesce(cr_refunded_cash,0) else 0 end) as sales_after
  from
    catalog_sales left outer join catalog_returns on
@@ -4789,12 +4789,12 @@ select
  and i_item_sk          = cs_item_sk
  and cs_warehouse_sk    = w_warehouse_sk 
  and cs_sold_date_sk    = d_date_sk
- and d_date between (cast ('2002-03-14' as date) - 30 days)
-                and (cast ('2002-03-14' as date) + 30 days) 
+ and d_date between (cast (date(date('2002-03-14')) as date) - interval '30' day)
+                and (cast (date(date('2002-03-14')) as date) + interval '30' day) 
  group by
     w_state,i_item_id
  order by w_state,i_item_id
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 40;
 
 
@@ -4833,7 +4833,7 @@ select
    lochierarchy desc
   ,case when lochierarchy = 0 then s_state end
   ,rank_within_parent
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 70;
 
 
@@ -4848,7 +4848,7 @@ select  i_brand_id brand_id, i_brand brand,
  	and d_year=1998
  group by i_brand, i_brand_id
  order by ext_price desc, i_brand_id
- fetch first 100 rows only ;
+ limit 100 ;
 SELECT QUERY_NUMER FROM 55;
 
 
@@ -4927,7 +4927,7 @@ where i_category in ('Children'))
  group by i_item_id
  order by i_item_id
       ,total_sales
-  fetch first 100 rows only;
+  limit 100;
 SELECT QUERY_NUMER FROM 60;
 
 
@@ -4942,8 +4942,8 @@ from
   ,customer_address
   ,call_center
 where
-    d_date between '2002-4-01' and 
-           (cast('2002-4-01' as date) + 60 days)
+    d_date between date(date(date('2002-4-01'))) and 
+           (cast(date(date('2002-4-01')) as date) + interval '60' day)
 and cs1.cs_ship_date_sk = d_date_sk
 and cs1.cs_ship_addr_sk = ca_address_sk
 and ca_state = 'NC'
@@ -4959,7 +4959,7 @@ and not exists(select *
                from catalog_returns cr1
                where cs1.cs_order_number = cr1.cr_order_number)
 order by count(distinct cs_order_number)
- fetch first 100 rows only;
+ limit 100;
 SELECT QUERY_NUMER FROM 16;
 
 

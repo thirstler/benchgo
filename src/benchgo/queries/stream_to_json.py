@@ -5,7 +5,7 @@ Convert raw query streams to json
 '''
 import json, os
 
-engines=['trino', 'dremio', 'sparksql']
+engines=['trino', 'dremio', 'spark']
 benchmarks=["tpcds"]
 scale_factors=['sf1', 'sf10', 'sf100', 'sf1000', 'sf10000', 'sf100000']
 query_streams=[1, 2, 4, 8]
@@ -25,4 +25,4 @@ for engine in engines:
                         with open(f'./{engine}/{benchmark}/{scale_factor}/{query_stream}/query_{stream}.json', 'w') as wh:
                             wh.write(json.dumps(queries[:-1]))
                         
-                    print(f"preocessed: {infile}")
+                    print(f"processed: {infile}")

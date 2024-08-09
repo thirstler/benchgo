@@ -1,6 +1,7 @@
 #!/bin/env python3
 import sys
-from benchgo import BENCHGO_VERSION, ROOT_HELP, TRINO_HELP, SPARKDF_HELP, SQPARKSQL_HELP, DREMIO_HELP, VASTDBSDK_HELP
+from benchgo import BENCHGO_VERSION, ROOT_HELP, TRINO_HELP, SPARK_HELP, DREMIO_HELP, VASTDBSDK_HELP, MKDATA_HELP
+from benchgo.spark.util import gen_config as spark_gen_config
 
 if __name__ == "__main__":
 
@@ -12,7 +13,19 @@ if __name__ == "__main__":
         sys.stderr.write(ROOT_HELP)
         sys.exit(1)
 
+    elif sys.argv[1] == 'mkdata':
+
+        if sys.argv[2] == 'transaction':
+            from benchgo.data import mk_data
+            mk_data()
+        else:
+            sys.stderr.write(MKDATA_HELP)
+
     elif sys.argv[1] == 'trino':
+
+        if len(sys.argv) < 3:
+            sys.stderr.write(TRINO_HELP)
+            sys.exit(1)
 
         if sys.argv[2] == 'tpcds':
             from benchgo.trino.tpcds import TrinoTPCDS
@@ -33,39 +46,15 @@ if __name__ == "__main__":
         else:
             sys.stderr.write(TRINO_HELP)
 
-    elif sys.argv[1] == 'sparksql':
+    elif sys.argv[1] == 'spark':
 
-        if sys.argv[2] == 'tpcds':
-            from benchgo.sparksql.tpcds import run
-            run()
-            
-        elif sys.argv[2] == 'tpch':
-            from benchgo.sparksql.tpch import run
-            run()
-            
-        elif sys.argv[2] == 'transaction':
-            from benchgo.sparksql.transaction import run
-            run()
-            
-        elif sys.argv[2] == 'throughput':
-            from benchgo.sparksql.throughput import run
-            run()
-
+        if len(sys.argv) > 2:
+            if sys.argv[2] == 'genconfig':
+                spark_gen_config()
+            else:
+                sys.stderr.write(SPARK_HELP)
         else:
-            sys.stderr.write(SQPARKSQL_HELP)
-
-    elif sys.argv[1] == 'sparkdf':
-            
-        if sys.argv[2] == 'transaction':
-            from benchgo.sparksql.transaction import run
-            run()
-            
-        elif sys.argv[2] == 'throughput':
-            from benchgo.sparksql.throughput import run
-            run()
-
-        else:
-            sys.stderr.write(SPARKDF_HELP)
+            sys.stderr.write(SPARK_HELP)
 
     elif sys.argv[1] == 'dremio':
 
@@ -96,18 +85,6 @@ if __name__ == "__main__":
         
         else:
             sys.stderr.write(VASTDBSDK_HELP)
-
-    elif sys.argv[1] == 'gen-spark-config':
-
-        from benchgo.spark_config_template import *
-        import os
-        try:
-            os.mkdir(BENCHGO_CONF_HOME)
-            with open(CONFIG_OUT_LOCATION, "x") as fh:
-                fh.write(CONFIG_TEMPLATE)
-            print("template written to {}, you need to configure it".format(CONFIG_OUT_LOCATION))
-        except FileExistsError:
-            print("'{}' already exists, move or remove and try again".format(CONFIG_OUT_LOCATION))
     
     else:
         sys.stderr.write(ROOT_HELP)

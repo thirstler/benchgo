@@ -1,26 +1,25 @@
-import datetime, sys, os
-from benchgo.prometheus_handler import PrometheusHandler
-
 def prometheus_args(parser) -> None:
 
     # Prometheus options
-    parser.add_argument("--prometheus-host", help="URL for prometheus host (e.g.: http://myhost:9090)")
+    parser.add_argument("--prometheus-host", default=None, help="URL for prometheus host (e.g.: http://myhost:9090)")
     parser.add_argument("--exec-prometheus-job", default="trino_1", help="Prometheus job name for execution cluster's node_exporter data")
     parser.add_argument("--cnode-prometheus-job", default="vast_cnodes", help="Prometheus job name for CNode cluster's node_exporter data")
     parser.add_argument("--sleep-between-queries", default="5", help="gap in seconds between queries to avoid overlap in stats collection")
 
 
+def vastdb_api_args(parser) -> None:
+    parser.add_argument("--access-key", default=None, help="API access key")
+    parser.add_argument("--secret-key", default=None, help="API secret key")
+    parser.add_argument("--endpoints", default=None, help="comma-delimited list of API endpoints for database access")
+    parser.add_argument("--database", default=None, help="VAST database/bucket name")
+    parser.add_argument("--schema", default=None, help="schema or schema path")
+
+
 def vastdb_sdk_args(parser) -> None:
     # SDK options
-    parser.add_argument("--aws-profile", default=None, help="use an AWS profile for credentials to the VAST Database")
-    parser.add_argument("--access-key", default=None, help="access key, falls-back to env AWS_ACCESS_KEY_ID")
-    parser.add_argument("--secret-key", default=None, help="secret key, falls-back to env AWS_SECRET_ACCESS_KEY")
-    parser.add_argument("--aws-region", default='us-east-1', help="AWS region")
-    parser.add_argument("--vast-endpoints", default=None, help="comma-delimited list of API endpoints for database access")
     parser.add_argument("--vdb-database", default=None, help="VAST database/bucket name")
     parser.add_argument("--vdb-schema", default=None, help="schema or schema path")
     parser.add_argument("--vdb-table", default=None, help="target table for tests - table will be created if it doesn't exit")
-    parser.add_argument("--streaming", action="store_true", help="simulate streaming performance (vs throughput)")
 
 
 def data_load_args(parser) -> None:
@@ -31,6 +30,7 @@ def data_load_args(parser) -> None:
     parser.add_argument("--insert-rows", default="10000", help="total number of rows to write (amount of data generated)")
     parser.add_argument("--insert-batch", default="1000", help="batch size for inserts")
 
+
 def tpcds_args(parser) -> None:
     parser.add_argument("--analyze-tables", action="store_true", help="runs ANALYZE on tables to populate statistcs for cost-based optimizers")
     parser.add_argument("--skip-precheck", action="store_true", help="skip table checks to a) make sure the selected scale-factor is correct and b) make sure the tables are complete")
@@ -39,6 +39,7 @@ def tpcds_args(parser) -> None:
     parser.add_argument("--no-analyze", action="store_true", help="do not include ANALYZE in queries")
     parser.add_argument("--step-query", action="store_true", help="run queries individually (if available) rather than full benchmark (single concurrency only)")
     parser.add_argument("--concurrency", default="1", help="specifcy concurrency for benchmark run")
+
 
 def global_args(parser) -> None:
     parser.add_argument("--name", default="benchgo", help="name this workload; determines the base name of the output directory")

@@ -3,147 +3,16 @@ from prometheus_api_client import PrometheusConnect
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
 from pyspark.sql.functions import col, countDistinct
-from benchgo.queries.trino.tpcds_sf10000_queries import *
-from benchgo.queries.trino.tpcds_sf1000_queries import *
-from benchgo.queries.trino.tpcds_selective_queries import *
 from benchgo.transaction_tables import *
-from benchgo.prometheus_handlers import *
+from benchgo.prometheus_handler import *
 from pathlib import Path
 
-class spcfg:
 
-    active = None
-
-    def __init__(self, section="default"):
-
-        config_path = "{}/.benchgo/benchgo_spark.yaml".format(Path.home())
-        with open(config_path, "r") as fh:
-            self.cfg = yaml.safe_load(fh)["config"]
-
-    def get(self, key_path):
-        path = key_path.split(".")
-        val = self.cfg
-        for i in path:
-            try:
-                val = val[i]
-            except KeyError:
-                return None
-            except TypeError:
-                return None
-            
-        return val
 
     
-    
-def dump_interactive(scfg):
-    """
-    This is pretty fragile and needs to be updated manually. As it's for
-    convenience purposes this is probably ok.  
-    """
-    
-    conf_vals = config_block(scfg)
-    sys.stdout.write("spark-sql ")
-    if scfg.get("iceberg.enable"):
-        try:
-            sys.stdout.write("  --packages {} \\\n".format(os.environ["ICEBERG_PACKAGE"]))
-        except:
-            sys.stdout.write("  --packages {} \\\n".format("[ICEBERG PACKAGE NAME]"))
 
 
-    if scfg.get("vdb.enable"):
-        try:
-            sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format(os.environ["VAST_CONNECTOR"]))
-            sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format(os.environ["VAST_CONNECTOR"])) 
-        except:
-            sys.stdout.write("  --driver-class-path $(echo {}/*.jar | tr ' ' ':') \\\n".format("/path/to/vdb/jars"))
-            sys.stdout.write("  --jars $(echo {}/*.jar | tr ' ' ',') \\\n".format("/path/to/vdb/jars")) 
 
-    sys.stdout.write("  --master {} \\\n".format(scfg.get("job.spark_master")))
-    sys.stdout.write("  --conf spark.executor.instances={} \\\n".format(scfg.get("job.num_exec")))
-    sys.stdout.write("  --conf spark.executor.cores={} \\\n".format(scfg.get("job.num_cores")))
-    sys.stdout.write("  --conf spark.executor.memory={} \\\n".format(scfg.get("job.exec_memory")))
-    sys.stdout.write("  --conf spark.driver.memory={} \\\n".format(scfg.get("job.driver_memory")))
-
-    for key, val in conf_vals:
-        sys.stdout.write("  --conf {key}=\"{val}\" \\\n".format(key=key, val=val))
-
-    sys.stdout.write("  --name {}\n\n".format(scfg.get("job.app_name")))
-
-    sys.stdout.flush()
-
-
-def config_block(scfg):
-    conf_vals = []
-
-    # Static stuff
-    conf_vals.append(("spark.ui.showConsoleProgress", "false"))
-    conf_vals.append(("spark.executor.userClassPathFirst", "true"))
-    conf_vals.append(("spark.driver.userClassPathFirst", "true"))
-
-    # Configured
-    conf_vals.append(("spark.executor.instances", scfg.get("job.num_exec")))
-    conf_vals.append(("spark.executor.cores", scfg.get("job.num_cores")))
-    conf_vals.append(("spark.executor.memory", scfg.get("job.exec_memory")))
-    conf_vals.append(("spark.driver.memory", scfg.get("job.driver_memory")))
-
-    if scfg.get("exec_monitor.enabled"):
-        conf_vals.append(("spark.executor.extraJavaOptions", scfg.get("exec_monitor.opts")))
-    if scfg.get("driver_monitor.enabled"):
-        conf_vals.append(("spark.driver.extraJavaOptions", scfg.get("driver_monitor.opts")))
-
-    if scfg.get("tpcds.explain") or scfg.get("tpcds_selective.explain"):
-        conf_vals.append(("spark.sql.debug.maxToStringFields", "100"))
-
-    if scfg.get("vdb.enable"):
-
-        # basic config
-        conf_vals.append( ("spark.ndb.endpoint", scfg.get("vdb.endpoint")) )
-        conf_vals.append( ("spark.ndb.data_endpoints", scfg.get("vdb.endpoints")) )
-        conf_vals.append( ("spark.ndb.access_key_id", scfg.get("vdb.access_key")) )
-        conf_vals.append( ("spark.ndb.secret_access_key", scfg.get("vdb.secret_key")) )
-        conf_vals.append( ("spark.ndb.num_of_splits", scfg.get("vdb.splits")) )
-        conf_vals.append( ("spark.ndb.num_of_sub_splits", scfg.get("vdb.subsplits")) )
-
-        # Advanced and static config
-        for key, val in scfg.get("vdb_config").items():
-            conf_vals.append( (key, val) )
-
-    if scfg.get("iceberg.enable"):
-
-        # Basic config
-        conf_vals.append( ("spark.hadoop.fs.s3a.endpoint", scfg.get("iceberg.s3_endpoint")) )
-        conf_vals.append( ("spark.hadoop.hive.metastore.uris", scfg.get("iceberg.metastore_uri")) )
-        conf_vals.append( ("spark.hadoop.fs.s3a.access.key", scfg.get("iceberg.access_key")) )
-        conf_vals.append( ("spark.hadoop.fs.s3a.secret.key", scfg.get("iceberg.secret_key")) )
-
-        # Advanced and static config
-        for key, val in scfg.get("iceberg_config").items():
-            conf_vals.append( (key, val) )
-    
-    return conf_vals
-
-
-def config_connect(scfg):
-
-    conf = SparkConf()
-    
-    conf.setAppName(scfg.get("job.app_name"))
-    conf.setMaster(scfg.get("job.spark_master"))
-
-    conf_vals = config_block(scfg)
-    for c in conf_vals:
-        print("{} -> {}".format(c[0], c[1]))
-        conf.set(c[0], c[1])
-    
-    for c in conf.getAll():
-        print("{: >40}: {}".format(c[0], c[1]))
-
-    # Sloppy af
-    session = SparkSession.builder.appName(scfg.get("job.app_name")).enableHiveSupport()
-    spark = session.config(conf=conf).getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR")
-
-    return spark
 
 
 def run_sql_inserts(scfg):
@@ -266,7 +135,6 @@ def run_inserts(scfg):
         print("generated {} distinct rows in {:.2f} secs".format(res[0][0], time.time()-start))
 
         for test in range(0, iterations):
-
             start = time.time()
             df.writeTo(target_table).append()
             timings.append(time.time()-start) 
@@ -444,24 +312,31 @@ def run_update_delete(scfg):
 
 
 
-def run_tpcds_selective(scfg):
-
-    queries = []
-    sq = tpcds_selective_queries()
-    queries = sq.gen_all(scfg.get("tpcds_selective.scale_factor"))
-
-    scfg.active = scfg.get("tpcds_selective")
-    run_sql_queries(scfg, queries)
-
-
 def run_tpcds(scfg):
 
-    queries = []
+    here = os.path.dirname(__file__)
+    threads = []
+    thread_data = []
+    for t, stream in enumerate(range(0, int(scfg.get("tpcds.concurrency")))):
+        file_path = os.path.join(here, 'queries/{engine}/tpcds/{scale_factor}/{concurrency}/query_{stream}.json'.format(
+            engine='sparksql',
+            scale_factor=scfg.get("tpcds.scale_factor"),
+            concurrency=scfg.get("tpcds.concurrency"),
+            stream=stream))
+        with open(file_path, "r") as jf:
+            queries = json.load(jf) 
 
-    if scfg.get("tpcds.scale_factor") == "sf10000":
-        queries = tpcds_10t_queries.queries
-    elif scfg.get("tpcds.scale_factor")  == "sf1000":
-        queries = tpcds_1t_queries.queries
+        # Thread function can do anything it wants, it just needs to update
+        # self.thread_data as it goes
+        '''
+        threads.append(threading.Thread(target=thread_function, args=(t, queries,)))
+        self.thread_data.append({
+            'started': None,
+            'finished': None,
+            'query_count': 0,
+            'current_query': ''
+        })
+        '''
 
     scfg.active = scfg.get("tpcds")
     run_sql_queries(scfg, queries)

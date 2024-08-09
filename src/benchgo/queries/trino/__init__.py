@@ -1,3 +1,16 @@
+'''
+# Unix/Linux sed commands to convert TPC-DS dsqgen output for db2 target to
+# something Trino can use. These are applied to all query_*.sql files present
+# in child folders before converting to JSON for use by this benchmark tool.
+sed -Ei "s/\+[\ ]+([0-9]+) days/\+ interval '\1' day/" query_*.sql
+sed -Ei "s/\-[\ ]+([0-9]+) days/\- interval '\1' day/" query_*.sql
+sed -Ei "s/d_date between '([^']+)'/d_date between date('\1')/" query_*.sql
+sed -Ei "s/('[0-9]+-[0-9]+-[0-9]+')/date(\1)/g" query_*.sql
+sed -Ei "s/and d3.d_date > d1.d_date \+ ([0-9]+)/and d3.d_date > d1.d_date + interval '\1' day/" query_*.sql
+'''
+
+
+# Trino queries in order
 TRINO_TPCDS_QUERY_SF1000={"query1": """
 with customer_total_return as
 (select sr_customer_sk as ctr_customer_sk
