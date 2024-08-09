@@ -1,86 +1,91 @@
 #!/bin/env python3
-import argparse
-from benchgo.benchgo_trino import *
-from benchgo.benchgo_sdk import *
+import sys
+from benchgo import BENCHGO_VERSION, ROOT_HELP, TRINO_HELP, SPARK_HELP, DREMIO_HELP, VASTDBSDK_HELP, MKDATA_HELP
+from benchgo.spark.util import gen_config as spark_gen_config
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Benchmark control script"
-    )
-    parser.add_argument("--name", default="benchgo", help="name this run something - will show up in output directory")
-    parser.add_argument("--benchmark", default=None, help="benchmark task to run (tpcds, tpcds_s, insert, update/delete)")
-    parser.add_argument("--engine", help="target engine (trino, starburst, spark, dremio, vdb-sdk)")
-    parser.add_argument("--force", action="store_true", help="force various operations (table overwrites, etc), TRIPLE CAUTION")
-    parser.add_argument("--reuse", action="store_true", help="use existing tables/resources rather than create new ones")
-    
-    # Prometheus options
-    parser.add_argument("--prometheus-host", help="URL for prometheus host (e.g.: http://myhost:9090)")
-    parser.add_argument("--trino-prometheus-job", default="trino_1", help="Prometheus job name containing the node_exporter data for the Trino cluster")
-    parser.add_argument("--cnode-prometheus-job", default="vast_cnodes", help="Prometheus job name containing the node_exporter data for the VAST CNode cluster")
-    parser.add_argument("--sleep-between-queries", default="5", help="gap in seconds between queries to avoid overlap in stats collection")
-    
-    # Trino options
-    parser.add_argument("--trino-coordinator", help="Trino coordinator URI (e.g.: http://trino_coord:8080)")
-    parser.add_argument("--trino-password", default=None, help="Trino password")
-    parser.add_argument("--trino-user", default='admin', help="Trino username")
-    parser.add_argument("--trino-catalog", help="catalog housing target tpcds database")
-    parser.add_argument("--trino-schema", help="schema housing target tpcds database")
-    
-    # Spark options
-    #parser.add_argument("--spark-master", help="Spark master URI (e.g.: spark://spark_master:7077)")
-    #parser.add_argument("--spark-executor-mem", default="32g", help="spark executor memory")
-    #parser.add_argument("--spark-database-path", default="spark_default", help="full path to target database")
-    
-    # Dremio options
-    pass
 
-    # SDK options
-    parser.add_argument("--aws-profile", default=None, help="use an AWS profile for credentials to the VAST Database")
-    parser.add_argument("--access-key", default=None, help="access key")
-    parser.add_argument("--secret-key", default=None, help="secret key")
-    parser.add_argument("--vast-endpoints", default=None, help="comma-delimited list of API endpoints for database access")
-    parser.add_argument("--vdb-database", default=None, help="VAST database name (sometimes called \"bucket\")")
-    parser.add_argument("--vdb-schema", default=None, help="schema or schema path")
-    parser.add_argument("--vdb-table", default=None, help="target table for tests - table will be created if it doesn't exit")
-    parser.add_argument("--streaming", action="store_true", help="simulate streaming performance (vs throughput)")
-    
-    # TPC-DS options
-    parser.add_argument("--tpcds-scale", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the queries to use, not the data set")
+    if len(sys.argv) > 1 and sys.argv[1] == '--version':
+        print("benchgo version: {}".format(BENCHGO_VERSION))
+        sys.exit(0)
 
-    # TPC-DS_S options
-    parser.add_argument("--tpcds-s-scale", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the queries to use, not the data set")
-    
-    # Insert options
-    parser.add_argument("--width-factor", default="1", help="column width of data generated, 1~=10 cols, 2~=20, 10~=100, etc...")
-    parser.add_argument("--sparsity", default="1.0", help="sparsity of generated data, 1.0 = 100%% data, 0.25 = 25%% data, 75%% NULLs")
-    parser.add_argument("--agent-procs", default="4", help="num procs to run per node (for SDK benchmarks, relevant to data generation and benchmark run)")
-    parser.add_argument("--insert-rows", default="10000", help="total number of rows to write (amount of data generated)")
-    parser.add_argument("--insert-batch", default="1000", help="batch size for inserts")
-    
-    # Update/delete options
-    parser.add_argument("--update-del-tests-sf", default="sf1", help="scale factor for tests (sf1,sf10,sf100,sf1000 or sf10000)")
-    parser.add_argument("--update-del-table", default=None, help="full path of table to run tests on (only works on tables prepared with mkdata utility)")
-    parser.add_argument("--merge-from-table", default=None, help="table (full path), to use as source for merge testing")
+    if len(sys.argv) < 2:
+        sys.stderr.write(ROOT_HELP)
+        sys.exit(1)
 
-    # Spark-related
-    parser.add_argument("--gen-spark-config", action="store_true", help="generate template configuration file for use with \"benchgo_spark\"")
+    elif sys.argv[1] == 'mkdata':
 
-    args = parser.parse_args()
+        if sys.argv[2] == 'transaction':
+            from benchgo.data import mk_data
+            mk_data()
+        else:
+            sys.stderr.write(MKDATA_HELP)
 
-    if args.gen_spark_config:
-        from benchgo.spark_config_template import *
+    elif sys.argv[1] == 'trino':
 
-        try:
-            os.mkdir(BENCHGO_CONF_HOME)
-            with open(CONFIG_OUT_LOCATION, "x") as fh:
-                fh.write(CONFIG_TEMPLATE)
-            print("template written to {}, you need to configure it".format(CONFIG_OUT_LOCATION))
-        except FileExistsError:
-            print("'{}' already exists, move or remove and try again".format(CONFIG_OUT_LOCATION))
+        if len(sys.argv) < 3:
+            sys.stderr.write(TRINO_HELP)
+            sys.exit(1)
+
+        if sys.argv[2] == 'tpcds':
+            from benchgo.trino.tpcds import TrinoTPCDS
+            TrinoTPCDS().run()
+            
+        elif sys.argv[2] == 'tpch':
+            from benchgo.trino.tpch import run
+            run()
+            
+        elif sys.argv[2] == 'transaction':
+            from benchgo.trino.transaction import run
+            run()
+            
+        elif sys.argv[2] == 'throughput':
+            from benchgo.trino.throughput import run
+            run()
+
+        else:
+            sys.stderr.write(TRINO_HELP)
+
+    elif sys.argv[1] == 'spark':
+
+        if len(sys.argv) > 2:
+            if sys.argv[2] == 'genconfig':
+                spark_gen_config()
+            else:
+                sys.stderr.write(SPARK_HELP)
+        else:
+            sys.stderr.write(SPARK_HELP)
+
+    elif sys.argv[1] == 'dremio':
+
+        if sys.argv[2] == 'tpcds':
+            from benchgo.dremio.tpcds import run
+            run()
+            
+        elif sys.argv[2] == 'tpch':
+            from benchgo.dremio.tpch import run
+            run()
+            
+        elif sys.argv[2] == 'throughput':
+            from benchgo.dremio.throughput import run
+            run()
+
+        else:
+            sys.stderr.write(DREMIO_HELP)
+
+    elif sys.argv[1] == 'vastdbsdk':
+            
+        if sys.argv[2] == 'transaction':
+            from benchgo.vastdbsdk.transaction import run
+            run()
+            
+        elif sys.argv[2] == 'throughput':
+            from benchgo.vastdbsdk.throughput import run
+            run()
         
-    elif args.engine == "trino":
-        run_trino(args)
-    elif args.engine == "vdb-sdk":
-        run_sdk(args)
+        else:
+            sys.stderr.write(VASTDBSDK_HELP)
+    
     else:
-        print("did you specify an engine?")
+        sys.stderr.write(ROOT_HELP)
+        sys.exit(1)

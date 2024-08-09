@@ -1,10 +1,9 @@
 #!/bin/env pyspark
 
-from benchgo.benchgo_spark import *
+from benchgo.spark.util import spcfg, dump_interactive
 
 if __name__ == "__main__":
 
-    #os.environ['PYSPARK_PYTHON'] = '/home/vastdata/venv/bin/python'
     
     config = spcfg()
     if config.get("job.dump_interactive"):
@@ -12,10 +11,14 @@ if __name__ == "__main__":
         exit(0)
         
     benchmarks = config.get("benchmarks")
-
-
     
     if "tpcds" in benchmarks:
-        run_tpcds(config)
-    if "insert" in benchmarks:
-        run_inserts(config)
+        from benchgo.spark.tpcds import SparkSQLTPCDS
+        SparkSQLTPCDS().run()
+
+    if "throughput" in benchmarks:
+        from benchgo.spark.throughput import SparkThroughput
+        SparkThroughput().run()
+
+    #if "insert" in benchmarks:
+    #    run_inserts(config)

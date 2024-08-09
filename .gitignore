@@ -1,4 +1,5 @@
 .git
 .vscode
 dist/*
+./src/benchgo.egg-info
 *.egg-info*
