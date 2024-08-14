@@ -83,7 +83,7 @@ CONFIG_TEMPLATE="""config:
   # benchmarks getting run. This probably isn't what you want. Use one.
   benchmarks:
     - "tpcds"
-    #- "tpcds-step"
+    #- "tpcds_step"
     #- "update/delete"
     #- "insert"
     #- "load"
@@ -109,6 +109,8 @@ CONFIG_TEMPLATE="""config:
 
   # To step through each TPC-DS query for individual timings, use "tpcds-step"
   tpcds_step:
+    tablecheck: True
+    analyze_tables: False
     database: "ndb.db0.tpcds"
     scale_factor: "sf1000"
     explain: True
@@ -175,3 +177,4 @@ CONFIG_TEMPLATE="""config:
     spark.hadoop.fs.s3a.path.style.access: "true"
     spark.hadoop.fs.s3a.connection.ssl.enabled: "false"
 """
+

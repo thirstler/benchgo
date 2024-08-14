@@ -1,34 +1,16 @@
-import sys, datetime, os, math, time, threading, json
-from benchgo.prometheus_handler import PrometheusHandler
-from multiprocessing import Process, Array, Value
+import sys, os, math, time, json
+from datetime import datetime
+#from multiprocessing import Process, Array, Value
+from threading import Thread
 from ctypes import c_double, c_int32
 
 class TPCDS:
     '''
     base class for any TPC-DS benchmark regardless of engine, should 
-    implement all of the generic stuff with engine specific routines in the
+    implement generic timers and reports from benchmark worker processes
+    defined child classes.
     '''
-
     queries = None
-    args = None
-
-    def query_prep(self, query) -> str:
-        prefix = ""
-        if not self.args.no_explain:
-            prefix += "EXPLAIN "
-            if not self.args.no_analyze:
-                prefix += "ANALYZE "
-
-        return("{prefix}{query}".format(prefix=prefix, query=query))
-    
-
-    def prometheus_connect(self) -> bool:
-
-        if not self.args.prometheus_host == None:
-            self.prometheus_handler = PrometheusHandler(self.args)
-            return True
-        else:
-            return False
 
 
     def logging_setup(self):
@@ -40,7 +22,7 @@ class TPCDS:
         else:
             job_name = self.args.name
 
-        self.output_dir = "/tmp/{}_{}".format(job_name, datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+        self.output_dir = "/tmp/{}_{}".format(job_name, datetime.now().strftime("%Y%m%d%H%M%S"))
 
         try:
             os.mkdir(self.output_dir)
@@ -61,22 +43,21 @@ class TPCDS:
 
     def output_status(self):
         
-        nownow = datetime.datetime.now()
+        nownow = datetime.now()
         delta = nownow - self.benchmark_start_time
         sys.stdout.write("\r{} | ".format(delta))
-        sys.stdout.write(" | ".join([ "{}%".format( math.ceil(x["query_count"].value*100/103) ) for i, x in enumerate(self.process_data)]))
+        sys.stdout.write(" | ".join([ "{}%".format(math.ceil(x["query_count"]*100/103) ) for i, x in enumerate(self.process_data)]))
 
     def output_results(self):
 
         start = min([x['started'] for x in self.process_data])
         end = max([x['finished'] for x in self.process_data])
-        print(start, end)
-        #benchtime = end - start
 
-        self.prometheus_handler.gather(start, end)
-        print("elapsed, exec cluster util, cnode cluster util, agg util, cluster ingress, disk writes, disk reads")
-        print("{benchtime}, {t_cluster_util}, {v_cluster_util}, {agg_cpu_util}, {tnet_quiet_in}, {disk_r}, {disk_w}".format(
-                benchtime=end,
+        self.prometheus_handler.gather(datetime.fromtimestamp(start), datetime.fromtimestamp(end))
+        print("\n# Benchmark runtime and cluster load statistics")
+        print("benchmark time, exec cluster util, cnode cluster util, agg util, cluster ingress, disk writes, disk reads")
+        print("{benchtime:.2f}, {t_cluster_util}, {v_cluster_util}, {agg_cpu_util}, {tnet_quiet_in:.2f}, {disk_r:.2f}, {disk_w:.2f}".format(
+                benchtime=end-start,
                 t_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.exec_cluster_rate) if self.prometheus_handler.collection_data.exec_cluster_rate <= 1 else "",
                 v_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.cnode_cluster_rate) if self.prometheus_handler.collection_data.cnode_cluster_rate <= 1 else "",
                 agg_cpu_util="{:.2f}".format(
@@ -118,27 +99,26 @@ class TPCDS:
             self.scale_factor = self.args.scale_factor
 
         for t, stream in enumerate(range(0, int(self.concurrency))):
+
             file_path = os.path.join(here, 'queries/{engine}/tpcds/{scale_factor}/{concurrency}/query_{stream}.json'.format(
                 engine=self.engine,
                 scale_factor=self.scale_factor,
                 concurrency=self.concurrency,
                 stream=stream))
+            
             with open(file_path, "r") as jf:
-                queries = json.load(jf) 
+                queries = json.load(jf)
 
             self.process_data.append({
-                'started': Value(c_double, 0),
-                'finished': Value(c_double, 0),
-                'query_count': Value(c_int32, 0),
-                'current_query': Value(c_int32, 0),
+                'started': 0,
+                'finished': 0,
+                'query_count': 0,
+                'current_query': 0,
+                'result': 0
             })
-            processes.append(Process(target=proc_function, 
-                                    args=(t, queries, self.process_data[-1]['started'],
-                                        self.process_data[-1]['finished'],
-                                        self.process_data[-1]['query_count'],
-                                        self.process_data[-1]['current_query'])))
+            processes.append(Thread(target=proc_function, args=(t, queries)))
         
-        self.benchmark_start_time = datetime.datetime.now()
+        self.benchmark_start_time = datetime.now()
         for t in processes:
             t.start()
 

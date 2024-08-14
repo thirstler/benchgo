@@ -15,6 +15,11 @@ if __name__ == "__main__":
     if "tpcds" in benchmarks:
         from benchgo.spark.tpcds import SparkSQLTPCDS
         SparkSQLTPCDS().run()
+    
+    if "tpcds_step" in benchmarks:
+        from benchgo.spark.tpcds import SparkSQLTPCDS
+        print("running tocds_step benchmark")
+        SparkSQLTPCDS().run_step()
 
     if "throughput" in benchmarks:
         from benchgo.spark.throughput import SparkThroughput

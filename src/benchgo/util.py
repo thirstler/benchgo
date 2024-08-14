@@ -32,18 +32,19 @@ def data_load_args(parser) -> None:
 
 
 def tpcds_args(parser) -> None:
-    parser.add_argument("--analyze-tables", action="store_true", help="runs ANALYZE on tables to populate statistcs for cost-based optimizers")
+    parser.add_argument("--analyze-tables", action="store_true", help="runs ANALYZE on tables to populate statistics for cost-based optimizers")
     parser.add_argument("--skip-precheck", action="store_true", help="skip table checks to a) make sure the selected scale-factor is correct and b) make sure the tables are complete")
     parser.add_argument("--scale-factor", help="TPC-DS scale factor sf1000, sf10000, sf100000; WARNING: this option selects the scale factor for queries, not the data set")
     parser.add_argument("--no-explain", action="store_true", help="do not include EXPLAIN in queries")
     parser.add_argument("--no-analyze", action="store_true", help="do not include ANALYZE in queries")
-    parser.add_argument("--step-query", action="store_true", help="run queries individually (if available) rather than full benchmark (single concurrency only)")
-    parser.add_argument("--concurrency", default="1", help="specifcy concurrency for benchmark run")
+    parser.add_argument("--step-query", action="store_true", help="run queries individually, not a benchmark but captures query plans and (sometimes) detailed information")
+    parser.add_argument("--run-queries", default=None, help="comma-delimited list of queries to run when using --step-query (query42,query73...)")
+    parser.add_argument("--concurrency", default="1", help="specify concurrency for benchmark run")
 
 
 def global_args(parser) -> None:
     parser.add_argument("--name", default="benchgo", help="name this workload; determines the base name of the output directory")
-    parser.add_argument("--outdir", default="/tmp/", help="specify output direcotry for benchmark results")
+    parser.add_argument("--outdir", default="/tmp/", help="specify output directory for benchmark results")
 
 
 def transaction_options(parser) -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 from benchgo.spark import CONFIG_TEMPLATE, ENV_TEMPLATE, SPARK_BENCHGO_CONFIG_DIR, SPARK_BENCHGO_CONFIG_FILE, SPARK_BENCHGO_ENV_FILE
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
-from pyspark.sql.functions import col, countDistinct
+
 
 def spark_args(parser) -> None:
     parser.add_argument("--spark-home", default="/opt/spark", help="set SPARK_HOME (required)")
@@ -48,7 +48,6 @@ def config_connect(scfg, job_name):
     for c in conf_vals:
         conf.set(c[0], c[1])
 
-
     # Sloppy af
     #session = SparkSession.builder.appName(job_name).enableHiveSupport()
     session = SparkSession.builder.appName(job_name)
@@ -57,7 +56,9 @@ def config_connect(scfg, job_name):
 
     return spark
 
+
 def config_block(scfg):
+    
     conf_vals = []
 
     # Static stuff
@@ -67,7 +68,7 @@ def config_block(scfg):
 
     # Configured
     conf_vals.append(("spark.executor.instances", scfg.get("job.num_exec")))
-    conf_vals.append(("spark.cores.max", int(scfg.get("job.num_cores"))))
+    conf_vals.append(("spark.executor.cores", int(scfg.get("job.num_cores"))))
     conf_vals.append(("spark.executor.memory", scfg.get("job.exec_memory")))
     conf_vals.append(("spark.driver.memory", scfg.get("job.driver_memory")))
 

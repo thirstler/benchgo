@@ -2,11 +2,6 @@ import sys, sqlite3, zlib, json
 from prometheus_api_client import PrometheusConnect
 
 class PrometheusHandler:
-    
-    prometheus = None
-    args = None
-    cnode_job = None
-    exec_job = None
 
     class window:
         start = 0
@@ -30,14 +25,19 @@ class PrometheusHandler:
         exec_disk_reads = None
         exec_disk_writes = None
 
-    def __init__(self, args):
-
-        self.args = args
+    def __init__(self,
+                 prometheus_host="http://localhost:9090",
+                 exec_job=None,
+                 cnode_job=None):
+        '''
+        Very basic, unauthenticated prometheus connection
+        '''
         self.prometheus = PrometheusConnect(
-            url=self.args.prometheus_host,
+            url=prometheus_host,
             disable_ssl=True,
         )
-
+        self.exec_job = exec_job
+        self.cnode_job = cnode_job
 
     def set_range(self, start, stop):
         self.window.start = start
@@ -62,16 +62,17 @@ class PrometheusHandler:
 
     def gather(self, start, stop):
 
+        # Set the window
         self.window.start = start
         self.window.stop = stop
 
         # Gather associated metrics
-        self.collection_data.exec_cpu_data = self.get_metric('node_cpu_seconds_total', {"job": self.args.exec_prometheus_job, "mode": "idle"})
-        self.collection_data.cnode_cpu_data = self.get_metric('node_cpu_seconds_total', {"job": self.args.cnode_prometheus_job, "mode": "idle"})
-        self.collection_data.exec_network_data_in = self.get_metric('node_netstat_IpExt_InOctets', {"job": self.args.exec_prometheus_job})
-        self.collection_data.exec_network_data_out = self.get_metric('node_netstat_IpExt_OutOctets', {"job": self.args.exec_prometheus_job})
-        self.collection_data.exec_disk_reads = self.get_metric('node_disk_read_bytes_total', {"job": self.args.exec_prometheus_job})
-        self.collection_data.exec_disk_writes = self.get_metric('node_disk_written_bytes_total', {"job": self.args.exec_prometheus_job})
+        self.collection_data.exec_cpu_data = self.get_metric('node_cpu_seconds_total', {"job": self.exec_job, "mode": "idle"})
+        self.collection_data.cnode_cpu_data = self.get_metric('node_cpu_seconds_total', {"job": self.cnode_job, "mode": "idle"})
+        self.collection_data.exec_network_data_in = self.get_metric('node_netstat_IpExt_InOctets', {"job": self.exec_job})
+        self.collection_data.exec_network_data_out = self.get_metric('node_netstat_IpExt_OutOctets', {"job": self.exec_job})
+        self.collection_data.exec_disk_reads = self.get_metric('node_disk_read_bytes_total', {"job": self.exec_job})
+        self.collection_data.exec_disk_writes = self.get_metric('node_disk_written_bytes_total', {"job": self.exec_job})
 
         # Compile aggregations
         self.collection_data.exec_cpus = self.agg_node_cpu_count(self.collection_data.exec_cpu_data)
@@ -84,6 +85,7 @@ class PrometheusHandler:
         self.collection_data.ttl_cpus = self.collection_data.exec_cpus + self.collection_data.cnode_cpus
         self.collection_data.exec_cluster_rate = 1 - self.agg_node_cpu_util_rate(self.collection_data.exec_cpu_data, "idle")
         self.collection_data.cnode_cluster_rate = 1 - self.agg_node_cpu_util_rate(self.collection_data.cnode_cpu_data, "idle")
+
 
     def agg_node_cpu_util_rate(self, data, mode) -> float:
         if data == None: return 0

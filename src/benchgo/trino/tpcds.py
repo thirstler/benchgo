@@ -4,11 +4,11 @@ from benchgo.queries.tpcds import tpcds_table_row_counts
 from benchgo.trino.util import *
 from benchgo.util import prometheus_args, tpcds_args, global_args
 from benchgo.tpcds import TPCDS
+from benchgo.prometheus_handler import PrometheusHandler
 
 
 class TrinoTPCDS(TPCDS):
     
-    # Declaratons
     output_dir = None
     result_log_fh = None
     prometheus = None
@@ -27,6 +27,16 @@ class TrinoTPCDS(TPCDS):
         self.engine = "trino"
 
 
+    def query_prep(self, query, no_analyze=False, no_explain=False) -> str:
+        prefix = ""
+        if not no_explain:
+            prefix += "EXPLAIN "
+            if not no_analyze:
+                prefix += "ANALYZE "
+
+        return("{prefix}{query}".format(prefix=prefix, query=query))
+    
+
     def run(self):
 
         if not self.args.skip_precheck:
@@ -43,8 +53,10 @@ class TrinoTPCDS(TPCDS):
 
         self.logging_setup()
 
-        if not self.prometheus_connect():
-            print("(no prometheus host specified, skipping stats gathering)")
+        self.prometheus_handler = PrometheusHandler(
+            prometheus_host=self.args.prometheus_host,
+            exec_job=self.args.exec_prometheus_job,
+            cnode_job=self.args.cnode_prometheus_job)
 
         if self.args.step_query:
             print("running TCP-DS queries in order")
@@ -61,7 +73,7 @@ class TrinoTPCDS(TPCDS):
 
             self.benchmark(self._benchmark_thread)
 
-            print("(Trino reports {:.2f} seconds aggregate query execution time)".format(max([sum(x["trino_timings"]) for x in self.thread_data])))
+            #print("(Trino reports {:.2f} seconds aggregate query execution time)".format(max([sum(x["trino_timings"]) for x in self.process_data])))
 
         #print("output in {}/result_log.csv".format(self.output_dir))
     
@@ -75,37 +87,42 @@ class TrinoTPCDS(TPCDS):
             self.queries = TRINO_TPCDS_QUERY_SF10000
         elif self.args.scale_factor == "sf1000":
             self.queries = TRINO_TPCDS_QUERY_SF1000
-        elif self.args.scale_factor == "sf100":
-            pass
-        elif self.args.scale_factor == "sf10":
-            pass
-        elif self.args.scale_factor == "sf1":
-            pass
+        else:
+            sys.stderr.write("WARNING: scale factor {} not supported, using sf1000 queries\n".format(self.args.scale_factor))
+            self.queries = TRINO_TPCDS_QUERY_SF1000
+        #else self.args.scale_factor == "sf100":
+        #    self.queries = TRINO_TPCDS_QUERY_SF100
+        #elif self.args.scale_factor == "sf10":
+        #    self.queries = TRINO_TPCDS_QUERY_SF10
+        #elif self.args.scale_factor == "sf1":
+        #    self.queries = TRINO_TPCDS_QUERY_SF1
+        #else:
+        #    self.queries = TRINO_TPCDS_QUERY_SF1000
             
         if len(self.queries) == 0:
             sys.stderr.write("scale factor {} not supported\n".format(self.args.scale_factor))
             sys.exit(1)
 
-    def _benchmark_thread(self, id, queries, started, finished, query_count, current_query):
+
+    def _benchmark_thread(self, id, queries):
         '''
         Actual executing and timing collection for this engine (Trino)
         '''
         tc = connection(self.args)
-        started.value = datetime.datetime.now().timestamp()
-        self.thread_data[id]['trino_timings'] = []
+        self.process_data[id]["started"] = datetime.datetime.now().timestamp()
+        #self.process_data[id]['trino_timings'] = []
+
         for q, query in enumerate(queries):
-            query_count.value = q
-            current_query.value = query
+            self.process_data[id]["current_query"] = query
+            self.process_data[id]["query_count"] = q
             result = tc.execute(query)
 
             # Things that happen after this point skew wll timings so don't
             # add anything that takes much time. Also, this needs to run 
             # near-line to the engine to avoid results movement to skew things
-            getme = result.fetchall()
-            self.thread_data[id]['trino_timings'].append(((result.stats["elapsedTimeMillis"]-result.stats["queuedTimeMillis"]))/1000)
+            self.process_data[id]["result"] = result.fetchall()
 
-
-        finished.value = datetime.datetime.now().timestamp()
+        self.process_data[id]["finished"] = datetime.datetime.now().timestamp()
 
 
     def step_benchmark(self):
@@ -113,8 +130,13 @@ class TrinoTPCDS(TPCDS):
         Old and only good for a limited number of scale factors and options.
         Useful for outputting info query-by-query
         '''
-        # Grab queries for the selected scale factor
         self.query_setup()
+
+        if self.args.run_queries:
+            limit_queries = {}
+            for q in [x.strip() for x in self.args.run_queries.split(",")]:
+                limit_queries[q] = self.queries[q]
+            self.queries = limit_queries
 
         # Go        
         benchmark_start_time = datetime.datetime.now()
@@ -153,16 +175,16 @@ class TrinoTPCDS(TPCDS):
 
             timing = "{rowcount:03d},{query},{query_id},{time},{nodes},{cpu},{mem},{rows},{bytes},{splits},{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
                 rowcount=row_count,
+                query=query,
+                query_id=ed.query_id,
+                time=((ed.stats["elapsedTimeMillis"]-ed.stats["queuedTimeMillis"]))/1000,
                 nodes=ed.stats["nodes"],
                 splits=ed.stats["totalSplits"],
-                time=((ed.stats["elapsedTimeMillis"]-ed.stats["queuedTimeMillis"]))/1000,
                 cpu=ed.stats["cpuTimeMillis"],
                 rows=ed.stats["processedRows"],
                 bytes=ed.stats["processedBytes"],
                 mem=ed.stats["peakMemoryBytes"],
                 state=ed.stats["state"],
-                query_id=ed.query_id,
-                query=query,
                 t_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.exec_cluster_rate) if self.prometheus_handler.collection_data.exec_cluster_rate <= 1 else "",
                 v_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.cnode_cluster_rate) if self.prometheus_handler.collection_data.cnode_cluster_rate <= 1 else "",
                 agg_cpu_util="{:.2f}".format(
@@ -194,12 +216,12 @@ class TrinoTPCDS(TPCDS):
                 
             with open("{outdir}/node_series_{query}.json".format(outdir=self.output_dir, query=query), "w") as fh:
                 fh.write(json.dumps({
-                    "trino_cpus": self.prometheus_handler.collection_data.exec_cpu_data,
+                    "exec_cpus": self.prometheus_handler.collection_data.exec_cpu_data,
                     "cnode_cpus": self.prometheus_handler.collection_data.cnode_cpu_data,
                     "tnet_in": self.prometheus_handler.collection_data.exec_network_data_in,
                     "tnet_out": self.prometheus_handler.collection_data.exec_network_data_out,
-                    "trino_disk_r": self.prometheus_handler.collection_data.exec_disk_reads,
-                    "trino_disk_w": self.prometheus_handler.collection_data.exec_disk_writes
+                    "exec_disk_r": self.prometheus_handler.collection_data.exec_disk_reads,
+                    "exec_disk_w": self.prometheus_handler.collection_data.exec_disk_writes
                 }))
                 fh.close()
 
@@ -209,7 +231,8 @@ class TrinoTPCDS(TPCDS):
         
         self.prometheus_handler.dump_stats(benchmark_start_time, benchmark_end_time, self.output_dir)
 
-        print("done")
+        print("\ndone")
+
 
     def tablecheck(self) -> bool:
         '''
@@ -234,6 +257,7 @@ class TrinoTPCDS(TPCDS):
         
         return check
     
+
     def analyze_tables(self) -> None:
         '''
         Analyze tables
@@ -247,7 +271,7 @@ class TrinoTPCDS(TPCDS):
             sys.stdout.flush()
             query = "ANALYZE {}.\"{}\".{}".format(self.args.catalog, self.args.schema, table)
             tc.execute(query)
-            rows = tc.fetchall()
+            #rows = tc.fetchall()
             print("done")
         
 
