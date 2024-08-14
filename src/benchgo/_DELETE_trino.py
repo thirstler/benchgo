@@ -7,7 +7,7 @@ from benchgo.queries.trino.tpcds_sf10000_queries import *
 from benchgo.queries.trino.tpcds_sf1000_queries import *
 from benchgo.prometheus_handler import *
 from benchgo.queries.trino.tpcds_selective_queries import *
-from benchgo.transaction_tables import sf_cols
+from benchgo.data import sf_cols
 from multiprocessing import Process
 
 

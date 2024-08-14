@@ -3,7 +3,7 @@ from prometheus_api_client import PrometheusConnect
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
 from pyspark.sql.functions import col, countDistinct
-from benchgo.transaction_tables import *
+from benchgo.data import *
 from benchgo.prometheus_handler import *
 from pathlib import Path
 

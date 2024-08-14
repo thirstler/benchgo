@@ -27,13 +27,18 @@ class SparkThroughput():
         else:
             print("NOK ({} cols) ".format(col_count))
 
+    def print_spark_config(self):
+        spark_parameters = config_block(self.cfg)
+        print("\nSpark Configuration:")
+        for param in spark_parameters:
+            print("{:>50}:{:<40}".format(param[0], param[1]))
+        print("")
 
     def run(self):
         
         self.table_df = self.spark.read.table(self.spark_cfg.get("throughput.database_path"))
         
-        for item in config_block(self.spark_cfg):
-            print("{:>40} : {:<39}".format(item[0], item[1]))
+        self.print_spark_config()
 
         self.warm_up_and_check(self.table_df)
 

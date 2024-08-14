@@ -45,7 +45,7 @@ CONFIG_TEMPLATE="""config:
   # Benchmark configuration
   benchmarks:
     - "tpcds"
-    - "throughput"
+    #- "throughput"
     #- "insert"
     #- "load"
     #- "merge"
@@ -57,14 +57,34 @@ CONFIG_TEMPLATE="""config:
     tests: "ALL"
     clear_cache: True
     sleep_time_sec: 5
+
+  # Configure TPC-DS benchmark. This will run all queries from the dsqgen-
+  # generated query streams. Results in legit benchmark.
   tpcds:
-    database: "ndb.db0.tpcds"
-    scale_factor: "sf1000"
+    # Check to make sure your selected scale factor matches the tables you're
+    # pointed at (or just make sure the tables are correctly generated)
+    tablecheck: True
+
+    # Analyze for table statistics
+    analyze_tables: False
+
+    database_path: "ndb.db0.tpcds.sf1"
+    scale_factor: "sf1"
+    concurrency: 1 # Only 1 stream is really supported, don't get fancy
     explain: True
-    run_queries: "all"
-    database_path: "spark_catalog.tpcds_1t"
     clear_cache: True
     sleep_time_sec: 5
+
+  # Step through each TPC-DS query for individual query timings.
+  tpcds_step:
+    tablecheck: False
+    analyze_tables: False
+    scale_factor: "sf1"
+    explain: True
+    run_queries: "all"
+    database_path: "ndb.db0.tpcds.sf1"
+    clear_cache: True
+    sleep_time_sec: 0
   insert:
     # Table format with either be "iceberg" or None
     table_format: "iceberg"
