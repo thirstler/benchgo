@@ -8,20 +8,46 @@ SCHEMA_DELIMITER='/'
 
 class TransactionTblSchema:
 
-    str_len_range = (1,128)
+    str_len_range = (0,5)
+    reference_table_sz = {
+        "wf1": {
+            "rf1000":       116497000000,
+            "rf10000":     1165000000000,
+            "rf100000":   11650000000000,
+            "rf1000000": 116500000000000
+        },
+        "wf10": {
+            "rf1000":       634742000000,
+            "rf10000":     6347420000000,
+            "rf100000":   63474200000000,
+            "rf1000000": 634742000000000
+        },
+        "wf100": {
+            "rf1000": 0,
+            "rf10000": 0,
+            "rf100000": 0,
+            "rf1000000": 0
+        },
+        "wf1000": {
+            "rf1000": 0,
+            "rf10000": 0,
+            "rf100000": 0,
+            "rf1000000": 0
+        },
+    }
 
     def __init__(self, width_factor, sparsity=1.0, string_range=(1,256)):
-        
+
         self.sparsity = sparsity
 
         with open('/usr/share/dict/words', 'r') as fh:
             words = fh.readlines()
             self.words = [s[:-1] for s in words]
             del words
-        
-        # define some quick generators
+
+        # define some generators
         self.rand_rec_id = lambda:   ''.join(random.choices(string.hexdigits, k=16))
-        self.rand_str6 = lambda:     None if random.random() > self.sparsity else ' '.join([ random.choice(self.words) for w in range(1, 6)])
+        self.rand_str6 = lambda:     None if random.random() > self.sparsity else ' '.join([ random.choice(self.words) for w in range(self.str_len_range[0], self.str_len_range[1])])
         self.rand_sfloat32 = lambda: None if random.random() > self.sparsity else (random.random()*(2**(32)))-(2**(32-1))
         self.rand_sfloat64 = lambda: None if random.random() > self.sparsity else (random.random()*(2**(64)))-(2**(64-1))
         self.rand_int32 = lambda:    None if random.random() > self.sparsity else int(random.random()*(2**32))-(2**(32-1))
@@ -76,11 +102,12 @@ class TransactionTblSchema:
             "bigint_val": (width_factor, "int64")
         }
         self.col_count = len(self.mk_schema(dtype="spark_sql"))
-        
+
         self.field_list = []
         for s in self.schema:
             for r in range(self.schema[s][0]):
                 self.field_list.append("{}_{}".format(s, r))
+
 
     def mk_schema(self, dtype=None) -> dict:
         '''
@@ -101,53 +128,15 @@ class TransactionTblSchema:
                 ))
 
         return columns
-    
+
     def pyarrow_schema(self):
         return pyarrow.schema(self.mk_schema(dtype="arrow"))
-    
 
-'''
-def mk_schema(width_factor):
-
-    columns = [("id", "BIGINT"), ("record_id", "VARCHAR(255)")]
-
-    # String data types:
-    for n in range(0, width_factor):
-        columns.append( ("str_val_{}".format(n), "VARCHAR(255)") )
-    # Float data types:
-    for n in range(0, width_factor*5):
-        columns.append( ("float_val_{}".format(n), "REAL") )
-    # Boolean data types:
-    for n in range(0, width_factor*2):
-        columns.append( ("bool_val_{}".format(n), "BOOLEAN") )
-    # Integer data types:
-    for n in range(0, width_factor*3):
-        columns.append( ("int_val_{}".format(n), "INTEGER") )
-
-    return columns
-    
-    
-def pyarrow_schema(width_factor):
-    columns = [("id", pyarrow.int64()), ("record_id", pyarrow.string())]
-
-    # String data types:
-    for n in range(0, width_factor):
-        columns.append( ("str_val_{}".format(n), pyarrow.string()) )
-    # Float data types:
-    for n in range(0, width_factor*5):
-        columns.append( ("float_val_{}".format(n), pyarrow.float32()) )
-    # Boolean data types:
-    for n in range(0, width_factor*2):
-        columns.append( ("bool_val_{}".format(n), pyarrow.bool_()) )
-    # Integer data types:
-    for n in range(0, width_factor*3):
-        columns.append( ("int_val_{}".format(n), pyarrow.int32()) )
-
-    return pyarrow.schema(columns)
-'''
+    def get_size(self):
+        pass
 
 
-def write_data(args, data, schema):
+def write_data(args, data, schema, vdbsession=None):
 
     obj_id = uuid.uuid4()
     if args.s3out:
@@ -156,9 +145,9 @@ def write_data(args, data, schema):
                 prefix = args.prefix + '/'
             else:
                 prefix = args.prefix
-                
+
         full_key = "{}{}".format(prefix, obj_id)
-            
+
         if args.endpoint:
             s3con = boto3.session.Session()
             client = s3con.client(
@@ -167,7 +156,7 @@ def write_data(args, data, schema):
             )
         else:
             client = boto3.client('s3')
-        
+
         sys.stdout.write("({endpoint}) uploading to s3://{bucket}/{key}...".format(endpoint=args.endpoint, bucket=args.s3out, key=full_key))
         sys.stdout.flush()
 
@@ -199,29 +188,24 @@ def write_data(args, data, schema):
 
     elif args.vdbout:
 
-        session = vastdb.connect(
-            endpoint=args.endpoint,
-            access=args.access_key,
-            secret=args.secret_key)
-        
         # Get the pyarrow schema
         schema = schema.pyarrow_schema()
 
-        # Turn into columns 
+        # Turn into columns
         columns = list(zip(*data))
         arrays = [pa.array(column, type=schema.field(i).type) for i, column in enumerate(columns)]
         record_batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
 
         # None shall pass without my permission
         # vdbschema = get_schema_path(session, args.vdbout, args.prefix.split(SCHEMA_DELIMITER))
-        with session.transaction() as tx:
+        with vdbsession.transaction() as tx:
             vdb_bucket = tx.bucket("db0")
             vdb_schema = schema_dive(vdb_bucket, args.prefix.split(SCHEMA_DELIMITER))
             if args.table_name == '_AUTO_':
                 table_name = "benchmark_wf{}_rf{}_sp{}".format(args.width_factor, int((int(args.records_per_job)*int(args.jobs))/1000000), args.sparsity)
             else:
                 table_name = args.table_name
-            
+
             # Quietly create the table
             if args.job == "1":
                 try:
@@ -233,26 +217,7 @@ def write_data(args, data, schema):
             table = vdb_schema.table(table_name)
 
             table.insert(record_batch)
-
-'''
-def get_schema_path(session, bucket_name, schema_path) -> object:
-    with session.transaction() as tx:
-        bucket = tx.bucket(bucket_name)
-        schema = schema_dive(bucket.schema(schema_path[0]), schema_path[1:])
-        if schema == None:
-            return None
-        return schema
-
-def check_for_schema(session, args) -> bool:
-
-    with session.transaction() as tx:
-        bucket = tx.bucket(args.vdbout)
-        names = args.prefix.split(SCHEMA_DELIMITER)
-        schema = schema_dive(bucket.schema(names[0]), names[1:])
-        if schema == None:
-            return False
-        return True
-'''      
+            
 
 def schema_dive(bucket, schemas):
     schema = bucket.schema(schemas[0])
@@ -266,7 +231,7 @@ def _schema_dive(schema, names) -> object:
         schema = schema.schema(this_name)
     except:
         return None
-    
+
     return _schema_dive(schema, names)
 
 
@@ -320,10 +285,10 @@ def mk_dict_row(id, width_factor, sparsity, cardinality):
     return dict_row
 
 
-    
+
 
 def mk_row(id, table_def):
-    
+
     # Mandatory fields
     col_data = [id, table_def.rand_rec_id()]
 
@@ -339,9 +304,9 @@ def mk_row(id, table_def):
 
             for x in values:
                 col_data.append(x)
-    
+
     return col_data
-        
+
 
 def _mk_row(id, width_factor, sparsity, cardinality):
 
@@ -351,7 +316,7 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
     # Strings
     for n in range(0, col_count.STR_COLS):
-        
+
         if random.random() < sparsity:
             if n == 0 and cardinality != 0:
                 col_data += (numeric_to_hash(random.randrange(0, cardinality), 64),)
@@ -362,7 +327,7 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
     # Floats
     for n in range(0, col_count.FLOAT_COLS):
-        
+
         if random.random() < sparsity:
             if n == 0 and cardinality != 0:
                 col_data += (random.randrange(0, cardinality)/cardinality,)
@@ -373,15 +338,15 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
     # Boolean data types:
     for n in range(0, col_count.BOOL_COLS):
-        
+
         if random.random() < sparsity:
             col_data += (True if random.random() < 0.5 else False,)
         else:
             col_data += (None,)
-    
+
     # Integer data types:
     for n in range(0, col_count.INT_COLS):
-        
+
         if random.random() < sparsity:
             if n == 0 and cardinality != 0:
                 col_data += (random.randrange(0,cardinality),)
@@ -395,6 +360,17 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
 def _mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit=1073741824) -> None:
 
+    
+    if args.vdbout:
+        session = vastdb.connect(
+            endpoint=args.endpoint,
+            access=args.access_key,
+            secret=args.secret_key)
+
+    else:
+        session = None
+
+
     start = (job-1) * multiplier
     end = job * multiplier
     size_in_ch=0
@@ -405,7 +381,7 @@ def _mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit
 
         data = mk_row(id, table_def)
 
-        # byte sizes are really vague 
+        # byte sizes are really vague
         size_in_ch += sys.getsizeof(data) + (width_factor*40)
 
         data_block.append(data)
@@ -416,11 +392,11 @@ def _mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit
 
         # size limit reached, write the block
         if size_in_ch > int(limit):
-            write_data(args, data_block, table_def)
+            write_data(args, data_block, table_def, vdbsession=session)
             size_in_ch = 0
             data_block.clear()
-    
-    
+
+
     # Write the stragglers
     write_data(args, data_block, table_def)
 
@@ -434,8 +410,8 @@ def numeric_to_hash(value: int, length: int) -> str:
     if length <= len(hex_hash):
         return hex_hash[:length]
     else:
-        return hex_hash.ljust(length, '0') 
-    
+        return hex_hash.ljust(length, '0')
+
 
 def mk_data():
 
@@ -473,7 +449,7 @@ def mk_data():
 
     if args.ddl:
         create_transaction_table(width_factor=int(args.width_factor), table_path=args.table_path)
-    
+
     if args.data:
         sys.stdout.write("generating data...\n")
         sys.stdout.flush()
@@ -486,7 +462,3 @@ def mk_data():
             limit=int(args.byteslimit)
         )
         print("\ndone")
-        
-
-            
-

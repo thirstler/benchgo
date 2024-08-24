@@ -22,8 +22,8 @@ if __name__ == "__main__":
         SparkSQLTPCDS().run_step()
 
     if "throughput" in benchmarks:
-        from benchgo.spark.throughput import SparkThroughput
-        SparkThroughput().run()
+        from benchgo.spark.filter import SparkFilter
+        SparkFilter().run()
 
     #if "insert" in benchmarks:
     #    run_inserts(config)
