@@ -47,8 +47,8 @@ List of implemented and planned benchmarks:
 
     benchgo trino tpcds --help
     benchgo trino tpch --help           [Not Implimented]
+    benchgo trino filter --help
     benchgo trino transaction --help    [Not Implimented]
-    benchgo trino throughput --help     [Not Implimented]
 
 '''
 SPARK_HELP='''

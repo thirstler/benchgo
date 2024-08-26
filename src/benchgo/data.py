@@ -36,7 +36,7 @@ class TransactionTblSchema:
         },
     }
 
-    def __init__(self, width_factor, sparsity=1.0, string_range=(1,256)):
+    def __init__(self, width_factor:int, sparsity:float=1.0, string_range=(1,256)):
 
         self.sparsity = sparsity
 

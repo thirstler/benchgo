@@ -17,7 +17,7 @@ def connection(args):
         session_prop = eval(args.session_properties) if type(args.session_properties) == str else args.session_properties
     else:
         session_prop = DEFAULT_TRINO_SESSION
-
+        
     conn = connect(
         host=endpoint.netloc.split(":")[0],
         port=endpoint.netloc.split(":")[1],
@@ -34,7 +34,7 @@ def connection(args):
 
 def trino_args(parser) -> None:
     parser.add_argument("--coordinator", help="Trino coordinator URI (e.g.: http://trino_coord:8080)")
-    parser.add_argument("--password", default=None, help="Trino password NOT IMPLIMENTED")
+    parser.add_argument("--password", default=None, help="Trino password NOT IMPLEMENTED")
     parser.add_argument("--user", default='admin', help="Trino username (requires unauthenticated requests atm)")
     parser.add_argument("--catalog", help="catalog housing target tpcds database that matches the selected scale factor")
     parser.add_argument("--schema", help="schema housing target tpcds database that matches the selected scale factor")

@@ -45,59 +45,6 @@ class SparkFilter(Filter):
         print("")
 
 
-    def header(self):
-
-        print("\njob, current_time, timing, rows_returned, exec_cluster_util, storage_cluster_util, aggregate_util, network_in, network_out, disk_read, disk_write")
-
-
-    def print_select_numeric(self, ratios:dict, bitwidth:int, field:str, sel_float=False):
-
-        for slice in ratios:
-            print("select_numeric({}, {}%),".format(field, slice*100), end="", flush=True)
-            then = datetime.now()
-            print("{},".format(then), end="", flush=True)
-
-            # Do the thing!
-            timing, row_count = self.select_numeric(ratio=slice, bitwidth=bitwidth, select_col=field, use_sql=False, sel_float=sel_float)
-
-            print("{:.4f},".format(timing), end="")
-            print("{},".format(row_count), end="")
-            self.print_prometheus_stats(then, datetime.now())
-
-
-    def print_get_by_substr(self, strings:dict, col:str):
-
-        for string in strings:
-            print("select_by_substr('{}'),".format(string), end="", flush=True)
-            then = datetime.now()
-            print("{},".format(then), end="", flush=True)
-
-            # Do the thing!
-            timing, row_count = self.select_by_substr(string, col, use_sql=True)
-
-            print("{:.4f},".format(timing), end="")
-            print("{},".format(row_count), end="")
-            self.print_prometheus_stats(then, datetime.now())
-
-
-    def print_prometheus_stats(self, then, now):
-
-        self.prometheus_handler.gather(then, now)
-
-        load_stats = "{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
-            t_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.exec_cluster_rate) if self.prometheus_handler.collection_data.exec_cluster_rate <= 1 else "",
-            v_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.cnode_cluster_rate) if self.prometheus_handler.collection_data.cnode_cluster_rate <= 1 else "",
-            agg_cpu_util="{:.2f}".format(
-                (   (self.prometheus_handler.collection_data.exec_cluster_rate  * self.prometheus_handler.collection_data.exec_cpus) +
-                    (self.prometheus_handler.collection_data.cnode_cluster_rate * self.prometheus_handler.collection_data.cnode_cpus)
-                ) / (self.prometheus_handler.collection_data.ttl_cpus if self.prometheus_handler.collection_data.ttl_cpus > 0 else 1)
-                ) if (self.prometheus_handler.collection_data.exec_cluster_rate <=1 and self.prometheus_handler.collection_data.cnode_cluster_rate <= 1) else "",
-            tnet_quiet_in=self.prometheus_handler.collection_data.exec_net_quiet_in,
-            disk_r=self.prometheus_handler.collection_data.exec_disk_r,
-            disk_w=self.prometheus_handler.collection_data.exec_disk_w)
-
-        print(load_stats)
-
 
     def get_words(self, num_words:int) -> dict:
 
@@ -135,21 +82,7 @@ class SparkFilter(Filter):
         self.print_select_by_words(self.get_words(4), "str_val_0")
 
         self.spark.stop()
-
-    def print_select_by_words(self, words, column):
-
-        then = datetime.now()
-        print("select_by_words('{}'),".format(len(words)), end="", flush=True)
-        then = datetime.now()
-        print("{},".format(then), end="", flush=True)
         
-        self.select_by_words(words, column)
-        timing, row_count = self.select_by_words(words, column)
-
-        print("{:.4f},".format(timing), end="")
-        print("{},".format(row_count), end="")
-        self.print_prometheus_stats(then, datetime.now())
-
 
     def select_by_words(self, words, select_col, andor="OR", use_sql=True):
 
