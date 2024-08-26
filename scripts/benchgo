@@ -39,9 +39,9 @@ if __name__ == "__main__":
             from benchgo.trino.transaction import run
             run()
             
-        elif sys.argv[2] == 'throughput':
-            from benchgo.trino.throughput import run
-            run()
+        elif sys.argv[2] == 'filter':
+            from benchgo.trino.filter import TrinoFilter
+            TrinoFilter().run()
 
         else:
             sys.stderr.write(TRINO_HELP)
