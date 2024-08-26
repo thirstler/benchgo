@@ -61,6 +61,8 @@ def filter_args(parser) -> None:
     parser.add_argument("--row-factor", required=True, help="row factor to be benchmarked, 1=1m rows (e.g.: 1000,10000,100000))")
     parser.add_argument("--tests", default="_ALL_", help="int,int64,float,float64,substring,words,1row (defaults to all tests)")
     parser.add_argument("--skip-precheck", action="store_true", help="tables are checked by default to make sure they match the benchmark, this skips that checks")
+    parser.add_argument("--analyze-table", action="store_true", help="analyze the table before benchmark")
+    
 
 
 

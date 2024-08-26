@@ -4,9 +4,13 @@ from datetime import datetime
 class Filter:
 
     def get_rnd_ks_slice(self, ratio:float=1.0, bitwidth:int=32, ret_float=False):
-
+        
+        tries = 0
+        target_length = (2**bitwidth) * ratio
+        if target_length >= 2**bitwidth:
+            target_length = (2**bitwidth)-1
+            
         while True:
-            target_length = (2**bitwidth) * ratio
             
             if ret_float:
                 target_offset = random.random() * random.randrange(-2**(bitwidth-1), 2**(bitwidth-1))
@@ -19,6 +23,12 @@ class Filter:
                     return target_offset, (target_offset+target_length)
                 else:
                     return target_offset, int(target_offset+target_length)
+            
+            if tries > 100:
+                end = -2**(bitwidth-1) + target_length
+                return -2**(bitwidth-1), end if ret_float else int(end)
+
+            tries += 1
 
 
     def print_prometheus_stats(self, then, now) -> None:
