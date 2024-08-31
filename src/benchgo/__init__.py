@@ -96,3 +96,5 @@ List of implemented and planned benchmarks:
     benchgo vastdbsdk throughput --help     [Not Implimented]
 
 '''
+DICT_FILE='words.txt'
+VDB_SCHEMA_DELIMITER='/'

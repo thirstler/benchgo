@@ -54,8 +54,8 @@ class PrometheusHandler:
                 start_time=self.window.start,
                 end_time=self.window.stop
             )
-        except Exception as e:
-            sys.stderr.write(str(e))
+        except:
+            pass
 
         return metric_value
     

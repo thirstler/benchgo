@@ -45,19 +45,6 @@ class SparkFilter(Filter):
         print("")
 
 
-
-    def get_words(self, num_words:int) -> dict:
-
-        with open("/usr/share/dict/words") as fh:
-            words = fh.readlines()
-
-        wordlist = []
-        for x in range(num_words):
-            wordlist.append(random.choice(words).strip())
-        
-        return wordlist
-
-
     def run(self):
 
         self.table_df = self.spark.read.table(self.spark_cfg.get("throughput.database_path"))
@@ -71,12 +58,13 @@ class SparkFilter(Filter):
 
         self.header()
 
-        int_test_ratios = [0.00001, 0.0001, 0.001, 0.01, 0.1]
-        self.print_select_numeric(int_test_ratios, 64, "bigint_val_0")
-        self.print_select_numeric(int_test_ratios, 32, "int_val_0")
-        self.print_get_by_substr(["abcdef", "abcde", "abcd", "abc", "ab"], "record_id")
-        self.print_select_numeric(int_test_ratios, 64, "double_val_0", sel_float=True)
-        self.print_select_numeric(int_test_ratios, 32, "float_val_0", sel_float=True)
+        numeric_test_ratios = [0.00001, 0.0001, 0.001, 0.01, 0.1]
+        self.print_select_numeric(numeric_test_ratios, 64, "bigint_val_0")
+        self.print_select_numeric(numeric_test_ratios, 32, "int_val_0")
+        self.print_select_numeric(numeric_test_ratios, 64, "double_val_0", sel_float=True)
+        self.print_select_numeric(numeric_test_ratios, 32, "float_val_0", sel_float=True)
+        self.print_get_by_substr(["abcdef", "abcde", "abcd", "abc", "ab"], "record_id")  
+        self.print_select_by_words(self.get_words(2), "str_val_0", andor='AND')
         self.print_select_by_words(self.get_words(1), "str_val_0")
         self.print_select_by_words(self.get_words(2), "str_val_0")
         self.print_select_by_words(self.get_words(4), "str_val_0")
@@ -84,32 +72,27 @@ class SparkFilter(Filter):
         self.spark.stop()
         
 
-    def select_by_words(self, words, select_col, andor="OR", use_sql=True):
+    def select_by_words(self, words, select_col, andor="OR",):
 
         words_sql = f" {andor} ".join(["{} LIKE '%{}%'".format(select_col, x) for x in words])
         s_ts = time.time()
         rc = 0
         try:
-            if use_sql:
-                filtered_df = self.spark.sql('SELECT {} FROM {} WHERE {}'.format(
+
+            query = 'SELECT {} FROM {} WHERE {}'.format(
                     ",".join(self.schema.field_list),
                     self.spark_cfg.get('throughput.database_path'),
-                    words_sql
-                ))
-            else:
-                pass # not implemented
+                    words_sql)
+            filtered_df = self.spark.sql(query)
 
-            filtered_df.persist(StorageLevel.MEMORY_ONLY) # Force read
-            rc = filtered_df.count()
+            filtered_df = self.spark.sql(query).collect()
             e_ts = time.time()
-            filtered_df.unpersist()
-            del filtered_df
 
         except Exception as e:
             sys.stderr.write(f"{e}\n")
-            return -1, 0
+            return None, None, None
         
-        return (e_ts-s_ts), rc
+        return (e_ts-s_ts), rc, None
         
 
     def select_by_substr(self, string, select_col, use_sql=False):
@@ -117,32 +100,23 @@ class SparkFilter(Filter):
         s_ts = time.time()
         rc = 0
         try:
-            if use_sql:
-                filtered_df = self.spark.sql('SELECT {} FROM {} WHERE {} LIKE \'{}%\''.format(
-                    ",".join(self.schema.field_list),
-                    self.spark_cfg.get('throughput.database_path'),
-                    select_col,
-                    string,
-                ))
-            else:
-                filtered_df = self.table_df.filter(
-                    self.table_df[select_col].startsWith(string)
-                ).select(self.schema.field_list)
-
-            filtered_df.persist(StorageLevel.MEMORY_ONLY) # Force read
-            rc = filtered_df.count()
+            
+            query = 'SELECT {fields} FROM {table} WHERE {sel_col} LIKE \'%{srch_str}%\''.format(
+                    fields=",".join([f"COUNT({x})" for x in self.schema.field_list]),
+                    table=self.spark_cfg.get('throughput.database_path'),
+                    sel_col=select_col,
+                    srch_str=string)
+            filtered_df = self.spark.sql(query).collect()
             e_ts = time.time()
-            filtered_df.unpersist()
-            del filtered_df
 
         except Exception as e:
             if self.verbose: sys.stderr.write(f"{e}\n")
-            return None
+            return None, None, None
 
-        return (e_ts-s_ts), rc
+        return (e_ts-s_ts), rc, None
 
 
-    def select_numeric(self, ratio:float=1.0, bitwidth:int=32, select_col:str="int_val_0", use_sql=False, sel_float=False):
+    def select_numeric(self, ratio:float=1.0, bitwidth:int=32, select_col:str="int_val_0", sel_float=False):
 
         # get a slice of the int space
         slice_start, slice_end = self.get_rnd_ks_slice(ratio=ratio, bitwidth=bitwidth, ret_float=sel_float)
@@ -150,31 +124,21 @@ class SparkFilter(Filter):
         s_ts = time.time()
         rc = 0
         try:
-            if use_sql:
-                filtered_df = self.spark.sql('SELECT {} FROM {} WHERE {} BETWEEN {} AND {}'.format(
-                    ",".join(self.schema.field_list),
-                    self.spark_cfg.get('throughput.database_path'),
-                    select_col,
-                    slice_start,
-                    slice_end
-                ))
-            else:
-                filtered_df = self.table_df.filter(
-                    self.table_df[select_col].between(slice_start, slice_end)
-                ).select(self.schema.field_list)
 
-            filtered_df.persist(StorageLevel.MEMORY_ONLY) # Force read
-            rc = filtered_df.count()
+            query = 'SELECT {fields} FROM "{table}" WHERE {sel_col} BETWEEN {start} AND {end}'.format(
+                fields=",".join([f"COUNT({x})" for x in self.schema.field_list]),
+                table=self.spark_cfg.get('throughput.database_path'),
+                sel_col=select_col,
+                start=slice_start,
+                end=slice_end)
+            filtered_df = self.spark.sql(query).collect()
             e_ts = time.time()
-
-            filtered_df.unpersist()
-            del filtered_df
-
+ 
         except Exception as e:
             if self.verbose: sys.stderr.write(f"{e}\n")
-            return None, None
+            return None, None, None
 
-        return (e_ts-s_ts), rc
+        return (e_ts-s_ts), rc, None
     
 
     def get_part_sz(self, part):

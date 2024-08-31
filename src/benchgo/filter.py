@@ -1,5 +1,6 @@
-import random
+import random, os
 from datetime import datetime
+from benchgo import DICT_FILE
 
 class Filter:
 
@@ -39,7 +40,7 @@ class Filter:
             print("performance stats not available")
             return
 
-        load_stats = "{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
+        load_stats = "{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r:.2f},{disk_w:.2f}".format(
             t_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.exec_cluster_rate) if self.prometheus_handler.collection_data.exec_cluster_rate <= 1 else "",
             v_cluster_util="{:.2f}".format(self.prometheus_handler.collection_data.cnode_cluster_rate) if self.prometheus_handler.collection_data.cnode_cluster_rate <= 1 else "",
             agg_cpu_util="{:.2f}".format(
@@ -53,51 +54,57 @@ class Filter:
 
         print(load_stats)
 
+
     def header(self):
 
-        print("\njob, current_time, timing, rows_returned, exec_cluster_util, storage_cluster_util, aggregate_util, network_in, network_out, disk_read, disk_write")
+        print("\njob, current_time, timing, rows_returned, bytes_returned, exec_cluster_util, storage_cluster_util, aggregate_util, network_flow, disk_read, disk_write")
 
 
     def print_get_by_substr(self, strings:dict, col:str):
 
         for string in strings:
-            print("select_by_substr('{}'),".format(string), end="", flush=True)
+            print("select_by_substr({}),".format(string), end="", flush=True)
             then = datetime.now()
             print("{},".format(then), end="", flush=True)
 
             # Do the thing!
-            timing, row_count = self.select_by_substr(string, col, use_sql=True)
+            timing, row_count, bytes_returned = self.select_by_substr(string, col)
 
-            print("{:.4f},".format(timing), end="")
-            print("{},".format(row_count), end="")
+            print(f"{timing:.4f},{row_count},{bytes_returned},", end="", flush=True)
             self.print_prometheus_stats(then, datetime.now())
                 
 
     def print_select_numeric(self, ratios:dict, bitwidth:int, field:str, sel_float=False):
 
         for slice in ratios:
-            print("select_numeric({}, {}%),".format(field, slice*100), end="", flush=True)
+            print("select_numeric('{}'; {}%),".format(field, slice*100), end="", flush=True)
             then = datetime.now()
             print("{},".format(then), end="", flush=True)
 
             # Do the thing!
-            timing, row_count = self.select_numeric(ratio=slice, bitwidth=bitwidth, select_col=field, use_sql=False, sel_float=sel_float)
+            timing, row_count, bytes_returned = self.select_numeric(ratio=slice, bitwidth=bitwidth, select_col=field, sel_float=sel_float)
 
-            print("{:.4f},".format(timing), end="")
-            print("{},".format(row_count), end="")
+            print(f"{timing:.4f},{row_count},{bytes_returned},", end="", flush=True)
             self.print_prometheus_stats(then, datetime.now())
             
 
-    def print_select_by_words(self, words, column):
+    def print_select_by_words(self, words, column, andor="OR"):
 
         then = datetime.now()
-        print("select_by_words('{}'),".format(len(words)), end="", flush=True)
+        print("select_by_words('{}'; '{}'),".format(len(words), andor), end="", flush=True)
         then = datetime.now()
         print("{},".format(then), end="", flush=True)
         
-        self.select_by_words(words, column)
-        timing, row_count = self.select_by_words(words, column)
+        #self.select_by_words(words, column)
+        timing, row_count, bytes_returned = self.select_by_words(words, column, andor=andor)
 
-        print("{:.4f},".format(timing), end="")
-        print("{},".format(row_count), end="")
+        print(f"{timing:.4f},{row_count},{bytes_returned},", end="", flush=True)
         self.print_prometheus_stats(then, datetime.now())
+
+
+    def get_words(self, num_words:int) -> dict:
+
+        with open("{}/{}".format(os.path.dirname(__file__), DICT_FILE), 'r') as fh:
+            words = [s[:-1] for s in fh.readlines()] # trim newlines
+        
+        return words

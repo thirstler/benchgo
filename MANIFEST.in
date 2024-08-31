@@ -1,1 +1,2 @@
 include src/benchgo/queries/*/*/*/*/*.json
+include src/benchgo/words.txt

@@ -1,10 +1,8 @@
 import random, string, math, pyarrow, argparse, sys, uuid, os, hashlib, vastdb
 import pyarrow as pa
 from ibis import _
-#import ibis
+from benchgo import DICT_FILE, VDB_SCHEMA_DELIMITER
 
-
-SCHEMA_DELIMITER='/'
 
 class TransactionTblSchema:
 
@@ -36,14 +34,13 @@ class TransactionTblSchema:
         },
     }
 
+
     def __init__(self, width_factor:int, sparsity:float=1.0, string_range=(1,256)):
 
         self.sparsity = sparsity
 
-        with open('/usr/share/dict/words', 'r') as fh:
-            words = fh.readlines()
-            self.words = [s[:-1] for s in words]
-            del words
+        with open("{}/{}".format(os.path.dirname(__file__), DICT_FILE), 'r') as fh:
+            self.words = [s[:-1] for s in fh.readlines()] # trim newlines
 
         # define some generators
         self.rand_rec_id = lambda:   ''.join(random.choices(string.hexdigits, k=16))
@@ -196,11 +193,9 @@ def write_data(args, data, schema, vdbsession=None):
         arrays = [pa.array(column, type=schema.field(i).type) for i, column in enumerate(columns)]
         record_batch = pa.RecordBatch.from_arrays(arrays, schema=schema)
 
-        # None shall pass without my permission
-        # vdbschema = get_schema_path(session, args.vdbout, args.prefix.split(SCHEMA_DELIMITER))
         with vdbsession.transaction() as tx:
             vdb_bucket = tx.bucket("db0")
-            vdb_schema = schema_dive(vdb_bucket, args.prefix.split(SCHEMA_DELIMITER))
+            vdb_schema = schema_dive(vdb_bucket, args.prefix.split(VDB_SCHEMA_DELIMITER))
             if args.table_name == '_AUTO_':
                 table_name = "benchmark_wf{}_rf{}_sp{}".format(args.width_factor, int((int(args.records_per_job)*int(args.jobs))/1000000), args.sparsity)
             else:
@@ -222,6 +217,7 @@ def write_data(args, data, schema, vdbsession=None):
 def schema_dive(bucket, schemas):
     schema = bucket.schema(schemas[0])
     return _schema_dive(schema, schemas[1:])
+
 
 def _schema_dive(schema, names) -> object:
     '''Test to see if the schema path exists'''
@@ -247,7 +243,6 @@ def parse_ip_list(endpoints) -> list:
         iplist.append(endpoints)
 
     return iplist
-
 
 
 def create_transaction_table(width_factor=1, table_path="trns_tbl"):
@@ -285,8 +280,6 @@ def mk_dict_row(id, width_factor, sparsity, cardinality):
     return dict_row
 
 
-
-
 def mk_row(id, table_def):
 
     # Mandatory fields
@@ -312,7 +305,6 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
     record_id = "{}".format(''.join(random.choices(string.ascii_letters, k=16)))
     col_data = (id, record_id)
-
 
     # Strings
     for n in range(0, col_count.STR_COLS):
@@ -359,17 +351,15 @@ def _mk_row(id, width_factor, sparsity, cardinality):
 
 
 def _mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit=1073741824) -> None:
-
     
     if args.vdbout:
         session = vastdb.connect(
             endpoint=args.endpoint,
             access=args.access_key,
             secret=args.secret_key)
-
+        
     else:
         session = None
-
 
     start = (job-1) * multiplier
     end = job * multiplier
@@ -398,9 +388,10 @@ def _mk_data(args, width_factor=1, job=1, sparsity=1.0, multiplier=100000, limit
 
 
     # Write the stragglers
-    write_data(args, data_block, table_def)
+    write_data(args, data_block, table_def, vdbsession=session)
 
     return None
+
 
 def numeric_to_hash(value: int, length: int) -> str:
 
@@ -441,7 +432,7 @@ def mk_data():
     parser.add_argument("--prefix", default="", help="place data in this S3 prefix or VDB schema path, depending on --s3out or --vdbout")
     parser.add_argument("--table-name", default="_AUTO_", help="when using --vdbout, specify a table name (automatic if not provided)")
     parser.add_argument("--endpoint", default=None, help="custom S3 endpoint (non AWS) or VDB endpoint (e.g.: http://10.0.0.1:8080)")
-    parser.add_argument("--byteslimit", default=1073741824, help="python bytes limit for batches and threshold for triggering a new object")
+    parser.add_argument("--byteslimit", default=33554432, help="python bytes limit for batches and threshold for triggering a new object")
     parser.add_argument("--access-key", help="VDB access key (use environment for S3)")
     parser.add_argument("--secret-key", help="VDB secret key (use environment for S3)")
 

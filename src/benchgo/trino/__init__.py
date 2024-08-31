@@ -2,7 +2,6 @@
 DEFAULT_TRINO_SESSION  = {
     "task_concurrency": 64
 }
-
 tpcds_table_row_counts = {
     "sf1": {
         "call_center": 6,

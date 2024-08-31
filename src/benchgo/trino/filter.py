@@ -5,7 +5,7 @@ import benchgo.trino.util as trino_util
 from benchgo.data import TransactionTblSchema
 from benchgo.prometheus_handler import PrometheusHandler
 from datetime import datetime
-import argparse, sys, time
+import argparse, sys, time, os
 
 class TrinoFilter(Filter):
 
@@ -67,8 +67,6 @@ class TrinoFilter(Filter):
         self.trino_conn.execute(query)
         print("done")
 
-    def header(self):
-        print("\njob, current_time, timing, rows_returned, exec_cluster_util, storage_cluster_util, aggregate_util, network_in, network_out, disk_read, disk_write")
 
     
     def select_numeric(self, ratio:float=1.0, bitwidth:int=32, select_col:str="int_val_0", use_sql=False, sel_float=False):
@@ -90,11 +88,58 @@ class TrinoFilter(Filter):
 
         s_ts = time.time()
         res = self.trino_conn.execute(query)
-        data = res.fetchall() # execution time include collection
+        data = res.fetchall() # execution time includes collection
         e_ts = time.time()
         rc = data[0][0]
 
-        return (e_ts-s_ts), rc
+        return (e_ts-s_ts), rc, res.stats["processedBytes"]
+
+
+    def select_by_substr(self, string, select_col, use_sql=False):
+
+        s_ts = time.time()
+        rc = 0
+
+        query = 'SELECT {fields} FROM "{catalog}"."{schema}"."{table}" WHERE {sel_col} LIKE \'%{string}%\''.format(
+                    fields=",".join([f"COUNT({x})" for x in self.schema.field_list]),
+                    catalog=self.args.catalog,
+                    schema=self.args.schema,
+                    table=self.args.target_table,
+                    sel_col=select_col,
+                    string=string,
+                )
+
+        s_ts = time.time()
+        res = self.trino_conn.execute(query)
+        data = res.fetchall() # execution time includes collection
+        e_ts = time.time()
+        rc = data[0][0]
+
+        return (e_ts-s_ts), rc, res.stats["processedBytes"]
+
+
+    def select_by_words(self, words, select_col, andor="OR", use_sql=True):
+
+        words_sql = f" {andor} ".join(["{} LIKE '%{}%'".format(select_col, x) for x in words])
+        s_ts = time.time()
+        rc = 0
+
+        query = 'SELECT {fields} FROM "{catalog}"."{schema}"."{table}" WHERE {words}'.format(
+                    fields=",".join([f"COUNT({x})" for x in self.schema.field_list]),
+                    catalog=self.args.catalog,
+                    schema=self.args.schema,
+                    table=self.args.target_table,
+                    words=words_sql
+                )
+
+        s_ts = time.time()
+        res = self.trino_conn.execute(query)
+        data = res.fetchall() # execution time includes collection
+        e_ts = time.time()
+        rc = data[0][0]
+
+        return (e_ts-s_ts), rc, res.stats["processedBytes"]
+    
 
 
     def run(self):
@@ -112,13 +157,19 @@ class TrinoFilter(Filter):
 
         self.header()
 
-        int_test_ratios = [0.00001, 0.0001, 0.001, 0.01, 0.1]
-        #int_test_ratios = [1.0]
-        self.print_select_numeric(int_test_ratios, 64, "bigint_val_0")
-        #self.print_select_numeric(int_test_ratios, 32, "int_val_0")
-        #self.print_get_by_substr(["abcdef", "abcde", "abcd", "abc", "ab"], "record_id")
-        #self.print_select_numeric(int_test_ratios, 64, "double_val_0", sel_float=True)
-        #self.print_select_numeric(int_test_ratios, 32, "float_val_0", sel_float=True)
-        #self.print_select_by_words(self.get_words(1), "str_val_0")
-        #self.print_select_by_words(self.get_words(2), "str_val_0")
-        #self.print_select_by_words(self.get_words(4), "str_val_0")
+        start = datetime.now()
+        numeric_test_ratios = [0.00001, 0.0001, 0.001, 0.01, 0.1]
+        self.print_select_numeric(numeric_test_ratios, 64, "bigint_val_0")
+        self.print_select_numeric(numeric_test_ratios, 32, "int_val_0")
+        self.print_select_numeric(numeric_test_ratios, 64, "double_val_0", sel_float=True)
+        self.print_select_numeric(numeric_test_ratios, 32, "float_val_0", sel_float=True)
+        self.print_get_by_substr(["abcdef", "abcde", "abcd", "abc", "ab"], "record_id")
+        self.print_select_by_words(self.get_words(2), "str_val_0", andor="AND")
+        self.print_select_by_words(self.get_words(1), "str_val_0")
+        self.print_select_by_words(self.get_words(2), "str_val_0")
+        self.print_select_by_words(self.get_words(4), "str_val_0")
+
+        outdir = '/tmp/{jobname}_{date}'.format(jobname=self.args.name, date=start.strftime('%Y%m%d%H%M%S'))
+        os.mkdir(outdir)
+        self.prometheus_handler.dump_stats(start, datetime.now(), outdir)
+        
