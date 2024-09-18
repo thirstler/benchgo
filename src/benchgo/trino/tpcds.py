@@ -1,11 +1,10 @@
-import argparse, json, datetime, time, requests, sys
+import argparse, json, datetime, time, requests, sys, trino
 from benchgo.queries.trino import *
 from benchgo.queries.tpcds import tpcds_table_row_counts
 from benchgo.trino.util import *
 from benchgo.util import prometheus_args, tpcds_args, global_args
 from benchgo.tpcds import TPCDS
 from benchgo.prometheus_handler import PrometheusHandler
-
 
 class TrinoTPCDS(TPCDS):
     
@@ -79,6 +78,9 @@ class TrinoTPCDS(TPCDS):
     
 
     def query_setup(self):
+        '''
+        Only used by step_benchark()
+        '''
         self.queries = []
 
         if self.args.scale_factor == "sf100000":
@@ -115,12 +117,30 @@ class TrinoTPCDS(TPCDS):
         for q, query in enumerate(queries):
             self.process_data[id]["current_query"] = query
             self.process_data[id]["query_count"] = q
-            result = tc.execute(query)
+
+            try:
+                qh = tc.execute(query)
+            except trino.exceptions.TrinoQueryError:
+                print('\nERROR: workload results invalid due to query error')
+                continue
+            except:
+                print('\nERROR: workload results invalid due to unknown error')
+                continue
 
             # Things that happen after this point skew wll timings so don't
-            # add anything that takes much time. Also, this needs to run 
-            # near-line to the engine to avoid results movement to skew things
-            self.process_data[id]["result"] = result.fetchall()
+            # add anything that takes much time. Also, benchgo needs to run 
+            # near-line to the engine to avoid excess collection time
+            result = qh.fetchall()
+
+            # Update connector-specific stats
+            self.process_data[id]["result"]    = result
+            self.process_data[id]["q_time"]   += (qh.stats["elapsedTimeMillis"] - qh.stats["elapsedTimeMillis"])
+            self.process_data[id]["q_nodes"]   = qh.stats["nodes"]
+            self.process_data[id]["q_cpu"]    += qh.stats["cpuTimeMillis"]
+            self.process_data[id]["q_mem"]     = max([qh.stats["peakMemoryBytes"], self.process_data[id]["q_mem"]])
+            self.process_data[id]["q_bytes"]  += qh.stats["processedBytes"]
+            self.process_data[id]["q_rows"]   += qh.stats["processedRows"]
+            self.process_data[id]["q_splits"] += qh.stats["totalSplits"]
 
         self.process_data[id]["finished"] = datetime.datetime.now().timestamp()
 
@@ -173,7 +193,7 @@ class TrinoTPCDS(TPCDS):
 
             self.prometheus_handler.gather(then, now)
 
-            timing = "{rowcount:03d},{query},{query_id},{time},{nodes},{cpu},{mem},{rows},{bytes},{splits},{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r},{disk_w}".format(
+            timing = "{rowcount:03d},{query},{query_id},{time},{nodes},{cpu},{mem},{rows},{bytes},{splits},{t_cluster_util},{v_cluster_util},{agg_cpu_util},{tnet_quiet_in:.2f},{disk_r:.2f},{disk_w:.2f}".format(
                 rowcount=row_count,
                 query=query,
                 query_id=ed.query_id,

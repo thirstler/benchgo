@@ -107,4 +107,4 @@ class Filter:
         with open("{}/{}".format(os.path.dirname(__file__), DICT_FILE), 'r') as fh:
             words = [s[:-1] for s in fh.readlines()] # trim newlines
         
-        return words
+        return [random.choice(words) for w in range(num_words)]

@@ -8,30 +8,13 @@ E.g.:
 
     benchgo trino tpcds --help
 
-The following this list of implemented and planned benchmarks:
+The following this list of engines are supported
 
-    # Generate data for transaction and throughput/filter tests
-    benchgo mkdata transaction --help
-    
-    # Trino workloads
-    benchgo trino tpcds --help
-    benchgo trino tpch --help           [Not Implimented]
-    benchgo trino transaction --help    [Not Implimented]
-    benchgo trino throughput --help     [Not Implimented]
-
-    # Spark workloads (see help on use of spark scripts)
-    benchgo spark --help
-
-    # Dremio 
-    benchgo dremio tpcds --help         [Not Implimented]
-    benchgo dremio tpch --help          [Not Implimented]
-    benchgo dremio throughput --help    [Not Implimented]
-
-    # VAST DB SDK 
-    benchgo vastdbsdk transaction --help   [Not Implimented]
-    benchgo vastdbsdk throughput --help    [Not Implimented]
-
+    trino
+    spark
+    mkdata
 '''
+
 MKDATA_HELP='''
 Create data for transaction and throughput workloads
 
@@ -46,9 +29,7 @@ Execute a benchmark with the Trino engine
 List of implemented and planned benchmarks:
 
     benchgo trino tpcds --help
-    benchgo trino tpch --help           [Not Implimented]
     benchgo trino filter --help
-    benchgo trino transaction --help    [Not Implimented]
 
 '''
 SPARK_HELP='''
@@ -74,27 +55,18 @@ Configure these files and run:
 
 '''
 DREMIO_HELP='''
+NOT IMPLEMENTED
 Execute a benchmark with the Dremio engine
 
     benchgo dremio [benchmark] [options]
 
-List of implemented and planned benchmarks:
-
-    benchgo dremio tpcds --help
-    benchgo dremio tpch --help           [Not Implimented]
-    benchgo dremio throughput --help     [Not Implimented]
 
 '''
 VASTDBSDK_HELP='''
+NOT IMPLEMENTED
 Execute a benchmark with the VAST DataBase Python SDK
 
     benchgo vastdbsdk [benchmark] [options]
-
-List of implemented and planned benchmarks:
-
-    benchgo vastdbsdk transaction --help    [Not Implimented]
-    benchgo vastdbsdk throughput --help     [Not Implimented]
-
 '''
 DICT_FILE='words.txt'
 VDB_SCHEMA_DELIMITER='/'

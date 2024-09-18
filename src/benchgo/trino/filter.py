@@ -131,7 +131,7 @@ class TrinoFilter(Filter):
                     table=self.args.target_table,
                     words=words_sql
                 )
-
+        
         s_ts = time.time()
         res = self.trino_conn.execute(query)
         data = res.fetchall() # execution time includes collection
